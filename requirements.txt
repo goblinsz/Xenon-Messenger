@@ -1,3 +1,6 @@
 PyQt6==6.8.1
 qasync==0.27.1
 aiohttp==3.11.13
+sqlalchemy==2.0.50
+asyncpg==0.31.0
+fastapi==0.136.3
