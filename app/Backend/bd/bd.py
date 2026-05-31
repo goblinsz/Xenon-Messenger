@@ -33,7 +33,6 @@ async def register_user(name: str, email: str, password: str) -> Optional[int]:
         )
     return user_id
 
-# 🔵 AUTHENTICATE
 async def authenticate_user(email: str, password: str) -> Tuple[Optional[str], bool]:
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
@@ -49,11 +48,11 @@ async def authenticate_user(email: str, password: str) -> Tuple[Optional[str], b
             return name, user_id
     return None, False
 
-async def get_all_users() -> List[tuple]:
+async def get_all_users(name: str) -> List[tuple]:
     async with pool.acquire() as conn:
-        rows = await conn.fetch("SELECT user_id, name, email FROM users ORDER BY name;")
+        rows = await conn.fetch("SELECT user_id, name, email FROM users where name = $1;", name)
         return [tuple(row) for row in rows]
 
-async def delete_user_from_db(user_id: int) -> None:
+async def delete_user_from_db(id: int) -> None:
     async with pool.acquire() as conn:
-        await conn.execute("DELETE FROM users WHERE user_id = $1;", user_id)
+        await conn.execute("DELETE FROM users WHERE id = $1;", id)

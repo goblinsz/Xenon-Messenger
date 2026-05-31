@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
 )
 from dataclasses import dataclass
 from datetime import datetime
+from RaS.sendk import send
 
 class Message:
     def __init__(self, text: str, author: str, date: datetime):
@@ -56,9 +57,9 @@ class Window(QWidget):
 
 
 
-    def send_message(self, text: str) -> None:
+    async def send_message(self, text: str) -> None:
         text = self.text.text().strip()
-
+        await send("gf", text, "lk")
         if not text:
             return
 
