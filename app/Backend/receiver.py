@@ -4,7 +4,7 @@ import aio_pika
 from aio_pika.abc import AbstractIncomingMessage
 from bd.bd import create_table_chat, filling_the_chat, init_pool, close_pool
 from sendk import send
-from datetime import datetime
+
 
 RABBIT_URL = "amqp://g:g@localhost/"
 EXCHANGE_NAME = "direct_exchange"
