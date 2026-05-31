@@ -1,8 +1,9 @@
+import asyncio
 import sys
 from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QLabel, QHBoxLayout, QVBoxLayout
 from ui_chat import Ui_MainWindow as UiChat
 from ui_auth import Ui_MainWindow as UiAuth
-
+from Backend.bd.bd import authenticate_user, register_user
 
 users = ["Mike", "John", "Ivan"]
 
@@ -13,15 +14,32 @@ class AuthWindow(QMainWindow):
         self.ui = UiAuth()
         self.ui.setupUi(self)
 
-        self.ui.Login.clicked.connect(self.login)
-        self.ui.Register.clicked.connect(self.register)
+        self.ui.login_Btn.clicked.connect(self.login)
+        self.ui.register_Btn.clicked.connect(self.register)
+
 
     def login(self):
-        username = self.ui.Username.toPlainText()
+        username = self.ui.username.toPlainText()
+        password = self.ui.password.toPlainText()
+
+        name, user_id = asyncio.run(authenticate_user(username, password))
+
+        if not user_id:
+            print("Wrong login")
+            return
+
         self.open_chat(username)
 
     def register(self):
-        username = self.ui.Username.text()
+        username = self.ui.username.toPlainText()
+        password = self.ui.password.toPlainText()
+
+        user_id = asyncio.run(register_user(username, password))
+
+        if not user_id:
+            print("Register failed")
+            return
+
         self.open_chat(username)
 
     def open_chat(self, username):

@@ -1,35 +1,66 @@
-from datetime import date
-
-from PyQt6.lupdate import user
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+
+from bd.bd import (
+    init_pool,
+    close_pool,
+    register_user,
+    authenticate_user,
+    get_all_users
+)
+
 app = FastAPI()
 
-users = []
-
-class User(BaseModel):
-    name: str
 
 
-class Messages(BaseModel):
-    message: str
-    date: date
-    author: User
+class UserCreate(BaseModel):
+    username: str
+    password: str
+
+
+class UserLogin(BaseModel):
+    username: str
+    password: str
+
+
+@app.post("/register")
+async def register(user: UserCreate):
+    try:
+        user_id = await register_user(
+            user.username,
+            user.password
+        )
+
+        return {
+            "status": "ok",
+            "user_id": user_id
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=str(e)
+        )
+
+@app.post("/login")
+async def login(user: UserLogin):
+    name, user_id = await authenticate_user(
+        user.username,
+        user.password
+    )
+
+    if user_id is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Wrong login or password"
+        )
+
+    return {
+        "status": "ok",
+        "user_id": user_id,
+        "username": name
+    }
 
 @app.get("/users")
-def get_users():
-    return users
-
-@app.post("/users")
-def create_user(user: User):
-    users.append(user)
-    return {"status": "ok"}
-
-@app.delete("/users/{name}")
-def delete_user(name: str):
-    for user.name in users:
-        if user.name == name:
-            users.remove(user)
-            return {"status": "ok"}
-    raise HTTPException(status_code=404, detail="User not found")
-
+async def get_users():
+    return await get_all_users()

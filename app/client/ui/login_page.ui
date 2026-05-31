@@ -34,7 +34,7 @@
     <property name="frameShadow">
      <enum>QFrame::Shadow::Raised</enum>
     </property>
-    <widget class="QTextEdit" name="Username">
+    <widget class="QTextEdit" name="username">
      <property name="geometry">
       <rect>
        <x>40</x>
@@ -44,7 +44,7 @@
       </rect>
      </property>
     </widget>
-    <widget class="QTextEdit" name="Password">
+    <widget class="QTextEdit" name="password">
      <property name="geometry">
       <rect>
        <x>40</x>
@@ -54,7 +54,7 @@
       </rect>
      </property>
     </widget>
-    <widget class="QPushButton" name="Login">
+    <widget class="QPushButton" name="login_Btn">
      <property name="geometry">
       <rect>
        <x>80</x>
@@ -67,7 +67,7 @@
       <string>Login</string>
      </property>
     </widget>
-    <widget class="QPushButton" name="Register">
+    <widget class="QPushButton" name="register_Btn">
      <property name="geometry">
       <rect>
        <x>80</x>

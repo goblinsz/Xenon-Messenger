@@ -18,7 +18,8 @@ from PySide6.QtGui import (QAction, QBrush, QColor, QConicalGradient,
     QTransform)
 from PySide6.QtWidgets import (QApplication, QFrame, QLabel, QListWidget,
     QListWidgetItem, QMainWindow, QMenu, QMenuBar,
-    QSizePolicy, QStatusBar, QTextEdit, QWidget)
+    QPushButton, QSizePolicy, QStatusBar, QTextEdit,
+    QWidget)
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
@@ -44,7 +45,7 @@ class Ui_MainWindow(object):
         self.contacts_List.setFont(font1)
         self.current_Text = QTextEdit(self.centralwidget)
         self.current_Text.setObjectName(u"current_Text")
-        self.current_Text.setGeometry(QRect(170, 500, 611, 51))
+        self.current_Text.setGeometry(QRect(170, 500, 571, 51))
         font2 = QFont()
         font2.setFamilies([u"Arial"])
         font2.setPointSize(14)
@@ -59,6 +60,13 @@ class Ui_MainWindow(object):
         self.current_Username.setObjectName(u"current_Username")
         self.current_Username.setGeometry(QRect(10, 5, 141, 21))
         self.current_Username.setFont(font2)
+        self.send_Btn = QPushButton(self.centralwidget)
+        self.send_Btn.setObjectName(u"send_Btn")
+        self.send_Btn.setGeometry(QRect(740, 500, 51, 51))
+        self.textEdit = QTextEdit(self.centralwidget)
+        self.textEdit.setObjectName(u"textEdit")
+        self.textEdit.setGeometry(QRect(350, 120, 104, 64))
+        self.textEdit.setReadOnly(True)
         MainWindow.setCentralWidget(self.centralwidget)
         self.menubar = QMenuBar(MainWindow)
         self.menubar.setObjectName(u"menubar")
@@ -84,6 +92,7 @@ class Ui_MainWindow(object):
         self.actionSettings.setText(QCoreApplication.translate("MainWindow", u"Settings", None))
         self.actionAdd_contact.setText(QCoreApplication.translate("MainWindow", u"Add contact", None))
         self.current_Username.setText(QCoreApplication.translate("MainWindow", u"Your username", None))
+        self.send_Btn.setText(QCoreApplication.translate("MainWindow", u"Send", None))
         self.menuSettings.setTitle(QCoreApplication.translate("MainWindow", u"Additional", None))
     # retranslateUi
 

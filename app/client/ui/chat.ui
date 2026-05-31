@@ -41,7 +41,7 @@
      <rect>
       <x>170</x>
       <y>500</y>
-      <width>611</width>
+      <width>571</width>
       <height>51</height>
      </rect>
     </property>
@@ -89,6 +89,32 @@
       <string>Your username</string>
      </property>
     </widget>
+   </widget>
+   <widget class="QPushButton" name="send_Btn">
+    <property name="geometry">
+     <rect>
+      <x>740</x>
+      <y>500</y>
+      <width>51</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Send</string>
+    </property>
+   </widget>
+   <widget class="QTextEdit" name="textEdit">
+    <property name="geometry">
+     <rect>
+      <x>350</x>
+      <y>120</y>
+      <width>104</width>
+      <height>64</height>
+     </rect>
+    </property>
+    <property name="readOnly">
+     <bool>true</bool>
+    </property>
    </widget>
   </widget>
   <widget class="QMenuBar" name="menubar">
