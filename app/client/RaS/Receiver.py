@@ -4,7 +4,7 @@ import aio_pika
 from aio_pika.abc import AbstractIncomingMessage
 
 
-RABBIT_URL = "amqp://guest:guest@10.0.0.103/"
+RABBIT_URL = "amqp://g:g@10.0.0.103/"
 EXCHANGE_NAME = "direct_exchange"
 MY_CLIENT_ID = "gf"
 

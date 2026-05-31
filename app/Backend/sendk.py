@@ -3,7 +3,7 @@ import aio_pika
 import time
 from datetime import datetime
 
-RABBIT_URL = "amqp://guest:guest@localhost/"
+RABBIT_URL = "amqp://g:g@localhost/"
 EXCHANGE_NAME = "direct_exchange"
 
 async def send(target_id: str, content: str, sender:str):

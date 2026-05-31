@@ -1,4 +1,6 @@
 import asyncio
+from time import sleep
+
 import asyncpg
 import bcrypt
 from typing import Optional, Tuple, List
@@ -7,7 +9,7 @@ DB_CONFIG = {
     "database": "postgres",
     "user": "postgres",
     "password": "postgres",
-    "host": "10.0.0.103",
+    "host": "localhost",
     "port": 5432
 }
 
@@ -57,16 +59,27 @@ async def delete_user_from_db(id: int) -> None:
     async with pool.acquire() as conn:
         await conn.execute("DELETE FROM users WHERE id = $1;", id)
 
+
 async def create_table_chat(id1: int, id2: int) -> None:
+    # 1. Формируем безопасное имя таблицы (через f-string, т.к. параметры не работают)
+    min_id = min(id1, id2)
+    max_id = max(id1, id2)
+    table_name = f"chat{min_id}{max_id}"  # Например: chat_47_123
+
     async with pool.acquire() as conn:
-        if id1 > id2:
-            await conn.fetch("CREATE TABLE '$1 - $2' (time varchar, sender bigint, target bigint, content: varchar(1000));", id2, id1)
-        elif id1 < id2:
-            await conn.fetch("CREATE TABLE '$1 - $2' (time varchar, sender bigint, target bigint, content: varchar(1000));", id1, id2)
+        await conn.execute(f"""
+            CREATE TABLE IF NOT EXISTS "{table_name}" (
+                time VARCHAR,
+                sender VARCHAR(10),
+                target VARCHAR(10),
+                content VARCHAR(1000)
+            )
+        """)
 
 async def filling_the_chat(id1: int, id2: int, content: str, time:str):
+    min_id = min(id1, id2)
+    max_id = max(id1, id2)
+    table_name = f"chat{min_id}{max_id}"
     async with pool.acquire() as conn:
-        if id1 > id2:
-            await conn.fetch("INSERT INTO '$1 - $2' VALUES ($3, $2, $1, $4) RETURNING id;", id2, id1, time, content)
-        elif id1 < id2:
-            await conn.fetch("INSERT INTO '$1 - $2' VALUES ($3, $1, $2, $4) RETURNING id;", id1, id2, time, content)
+        sleep(10)
+        await conn.fetch(f"INSERT INTO {table_name} VALUES ($3, $2, $1, $4);", str(id2), str(id1), time, content)
