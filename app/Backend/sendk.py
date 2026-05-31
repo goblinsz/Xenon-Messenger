@@ -1,12 +1,10 @@
 import json
 import aio_pika
-import time
-from datetime import datetime
 
 RABBIT_URL = "amqp://g:g@localhost/"
 EXCHANGE_NAME = "direct_exchange"
 
-async def send(target_id: str, content: str, sender:str):
+async def send(target_id: str, content: str, sender:str, timestamp:str):
 
     if not target_id or not content:
         #Сообщение не может быть пустым
@@ -15,7 +13,7 @@ async def send(target_id: str, content: str, sender:str):
     message_data = {
         "from": sender,
         "content": content,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": timestamp
     }
     message_body = json.dumps(message_data, ensure_ascii=False).encode('utf-8')
 
@@ -41,7 +39,7 @@ async def send(target_id: str, content: str, sender:str):
                 delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
                 content_type="application/json",
                 content_encoding="utf-8",
-                headers={"sender": sender, "timestamp": str(time.time())}  # Можно отследить отправителя
+                headers={"sender": sender, "timestamp": timestamp}  # Можно отследить отправителя
             )
 
             await exchange.publish(message, routing_key=target_id)

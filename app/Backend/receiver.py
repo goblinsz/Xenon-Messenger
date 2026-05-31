@@ -21,12 +21,12 @@ async def on_message(message: AbstractIncomingMessage):
         sender = int(data.get('from', '0'))
         target = int(data.get('target', '0'))
         content = data.get('content', 'Нет содержимого')
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = data.get('timestamp', "Когда-то")
 
         # 2. Обрабатываем бизнес-логику
         await create_table_chat(sender, target)
         await filling_the_chat(sender, target, content, timestamp)
-        await send(str(target), content, str(sender))
+        await send(str(target), content, str(sender), timestamp)
 
         # 3. Успешное подтверждение
         await message.ack()

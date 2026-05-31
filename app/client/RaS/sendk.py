@@ -16,7 +16,7 @@ async def send(target_id: str, content: str, sender:str):
         "from": sender,
         "target": target_id,
         "content": content,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M')
     }
     message_body = json.dumps(message_data, ensure_ascii=False).encode('utf-8')
 
