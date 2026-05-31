@@ -90,22 +90,6 @@
      </property>
     </widget>
    </widget>
-   <widget class="QFrame" name="chatContainer">
-    <property name="geometry">
-     <rect>
-      <x>179</x>
-      <y>430</y>
-      <width>591</width>
-      <height>61</height>
-     </rect>
-    </property>
-    <property name="frameShape">
-     <enum>QFrame::Shape::StyledPanel</enum>
-    </property>
-    <property name="frameShadow">
-     <enum>QFrame::Shadow::Raised</enum>
-    </property>
-   </widget>
   </widget>
   <widget class="QMenuBar" name="menubar">
    <property name="geometry">
