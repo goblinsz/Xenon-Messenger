@@ -56,3 +56,17 @@ async def get_all_users(name: str) -> List[tuple]:
 async def delete_user_from_db(id: int) -> None:
     async with pool.acquire() as conn:
         await conn.execute("DELETE FROM users WHERE id = $1;", id)
+
+async def create_table_chat(id1: int, id2: int) -> None:
+    async with pool.acquire() as conn:
+        if id1 > id2:
+            await conn.fetch("CREATE TABLE '$1 - $2' (time varchar, sender bigint, target bigint, content: varchar(1000));", id2, id1)
+        elif id1 < id2:
+            await conn.fetch("CREATE TABLE '$1 - $2' (time varchar, sender bigint, target bigint, content: varchar(1000));", id1, id2)
+
+async def filling_the_chat(id1: int, id2: int, content: str, time:str):
+    async with pool.acquire() as conn:
+        if id1 > id2:
+            await conn.fetch("INSERT INTO '$1 - $2' VALUES ($3, $2, $1, $4) RETURNING id;", id2, id1, time, content)
+        elif id1 < id2:
+            await conn.fetch("INSERT INTO '$1 - $2' VALUES ($3, $1, $2, $4) RETURNING id;", id1, id2, time, content)

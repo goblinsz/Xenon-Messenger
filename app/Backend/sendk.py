@@ -3,7 +3,7 @@ import aio_pika
 import time
 from datetime import datetime
 
-RABBIT_URL = "amqp://guest:guest@10.0.0.103:15672/"
+RABBIT_URL = "amqp://guest:guest@localhost/"
 EXCHANGE_NAME = "direct_exchange"
 
 async def send(target_id: str, content: str, sender:str):
@@ -14,7 +14,6 @@ async def send(target_id: str, content: str, sender:str):
 
     message_data = {
         "from": sender,
-        "target": target_id,
         "content": content,
         "timestamp": datetime.utcnow().isoformat()
     }
@@ -45,7 +44,7 @@ async def send(target_id: str, content: str, sender:str):
                 headers={"sender": sender, "timestamp": str(time.time())}  # Можно отследить отправителя
             )
 
-            await exchange.publish(message, routing_key="server")
+            await exchange.publish(message, routing_key=target_id)
 
             #Сообщение отправлено
 
