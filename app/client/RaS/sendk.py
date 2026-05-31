@@ -22,7 +22,7 @@ async def send(target_id: str, content: str, sender:str):
 
     connection = None
     try:
-        # 1. Подключение к брокеру
+
         connection = await aio_pika.connect_robust(RABBIT_URL)
 
         async with connection:
