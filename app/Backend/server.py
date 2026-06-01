@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
@@ -9,14 +10,21 @@ from bd.bd import (
     get_all_users
 )
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await on_startup()
+    yield
+    await on_shutdown()
 
-async def startup():
+app = FastAPI(lifespan=lifespan)
+
+
+async def on_startup():
+    print("🚀 FastAPI запускается!")
     await init_pool()
 
-
-@app.on_event("shutdown")
-async def shutdown():
+async def on_shutdown():
+    print("🛑 FastAPI останавливается!")
     await close_pool()
 
 class UserCreate(BaseModel):
@@ -32,6 +40,8 @@ class UserLogin(BaseModel):
 @app.post("/register")
 async def register(user: UserCreate):
     try:
+        await init_pool()
+        print(user.username, user.password)
         user_id = await register_user(
             user.username,
             user.password
@@ -43,9 +53,10 @@ async def register(user: UserCreate):
         }
 
     except Exception as e:
+        print(f"❌ Ошибка регистрации: {e}")
         raise HTTPException(
             status_code=400,
-            detail=str(e)
+            detail=str(e) + user.username + user.username
         )
 
 @app.post("/login")

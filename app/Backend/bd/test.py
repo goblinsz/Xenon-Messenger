@@ -1,12 +1,12 @@
 import asyncio
 
-from app.Backend.bd.bd import init_pool, get_all_users, close_pool
+from app.Backend.bd.bd import init_pool, close_pool, register_user
 
 
 async def main():
     await init_pool()
 
-    print(await get_all_users("Fox"))
+    await register_user("dddededede", "eefefefefafsfs")
 
     await close_pool()
 

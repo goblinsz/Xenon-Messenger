@@ -1,9 +1,8 @@
 import asyncio
 import sys
 from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QLabel, QHBoxLayout, QVBoxLayout
-from client.ui.ui_chat import Ui_MainWindow as UiChat
-from client.ui.ui_auth import Ui_MainWindow as UiAuth
-from Backend.bd.bd import authenticate_user, register_user
+from ui_chat import Ui_MainWindow as UiChat
+from ui_auth import Ui_MainWindow as UiAuth
 import requests
 
 users = ["Mike", "John", "Ivan"]
@@ -23,7 +22,7 @@ class AuthWindow(QMainWindow):
         password = self.ui.password.toPlainText()
 
         response = requests.post(
-            "http://127.0.0.1:8000/login",
+            "http://10.0.0.103:8000/login",
             json={
                 "username": username,
                 "password": password
@@ -45,7 +44,7 @@ class AuthWindow(QMainWindow):
         password = self.ui.password.toPlainText()
 
         response = requests.post(
-            "http://127.0.0.1:8000/register",
+            "http://10.0.0.103:8000/register",
             json={
                 "username": username,
                 "password": password
