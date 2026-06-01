@@ -2,6 +2,7 @@ import asyncio
 import json
 import aio_pika
 from aio_pika.abc import AbstractIncomingMessage
+from chat_history import save_message
 
 
 RABBIT_URL = "amqp://g:g@10.0.0.103/"
@@ -20,6 +21,15 @@ async def on_message(message: AbstractIncomingMessage):
             content = data.get('content', 'Нет содержимого')
             timestamp = data.get('timestamp', '-')
 
+            save_message(
+                time=timestamp,
+                sender=int(sender),
+                target=int(MY_CLIENT_ID),
+                content=content,
+                is_outgoing=True
+            )
+
+            await message.ack()
         except json.JSONDecodeError:
             print(f" Ошибка парсинга JSON: {body}")
             await message.nack(requeue=True)

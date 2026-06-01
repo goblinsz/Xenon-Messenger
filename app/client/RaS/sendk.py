@@ -2,6 +2,7 @@ import json
 import aio_pika
 import time
 from datetime import datetime
+from chat_history import save_message
 
 RABBIT_URL = "amqp://g:g@10.0.0.103:15672/"
 EXCHANGE_NAME = "direct_exchange"
@@ -46,6 +47,14 @@ async def send(target_id: str, content: str, sender:str):
             )
 
             await exchange.publish(message, routing_key="server")
+
+            save_message(
+                time=datetime.now().strftime('%Y-%m-%d %H:%M'),
+                sender=int(sender),
+                target=int(target_id),
+                content=content,
+                is_outgoing=True
+            )
 
             #Сообщение отправлено
 
