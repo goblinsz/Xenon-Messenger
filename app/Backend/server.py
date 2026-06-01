@@ -66,7 +66,7 @@ async def login(user: UserLogin):
         user.password
     )
 
-    if user_id is None:
+    if user_id is False:
         raise HTTPException(
             status_code=401,
             detail="Wrong login or password"
