@@ -11,7 +11,13 @@ from bd.bd import (
 
 app = FastAPI()
 
+async def startup():
+    await init_pool()
 
+
+@app.on_event("shutdown")
+async def shutdown():
+    await close_pool()
 
 class UserCreate(BaseModel):
     username: str

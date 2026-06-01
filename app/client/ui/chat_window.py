@@ -1,9 +1,10 @@
 import asyncio
 import sys
 from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QLabel, QHBoxLayout, QVBoxLayout
-from ui_chat import Ui_MainWindow as UiChat
-from ui_auth import Ui_MainWindow as UiAuth
+from client.ui.ui_chat import Ui_MainWindow as UiChat
+from client.ui.ui_auth import Ui_MainWindow as UiAuth
 from Backend.bd.bd import authenticate_user, register_user
+import requests
 
 users = ["Mike", "John", "Ivan"]
 
@@ -17,30 +18,49 @@ class AuthWindow(QMainWindow):
         self.ui.login_Btn.clicked.connect(self.login)
         self.ui.register_Btn.clicked.connect(self.register)
 
-
     def login(self):
         username = self.ui.username.toPlainText()
         password = self.ui.password.toPlainText()
 
-        name, user_id = asyncio.run(authenticate_user(username, password))
+        response = requests.post(
+            "http://127.0.0.1:8000/login",
+            json={
+                "username": username,
+                "password": password
+            }
+        )
 
-        if not user_id:
-            print("Wrong login")
-            return
+        if response.status_code == 200:
+            data = response.json()
 
-        self.open_chat(username)
+            print(data)
+
+            self.open_chat(data["username"])
+
+        else:
+            print(response.json())
 
     def register(self):
         username = self.ui.username.toPlainText()
         password = self.ui.password.toPlainText()
 
-        user_id = asyncio.run(register_user(username, password))
+        response = requests.post(
+            "http://127.0.0.1:8000/register",
+            json={
+                "username": username,
+                "password": password
+            }
+        )
 
-        if not user_id:
-            print("Register failed")
-            return
+        if response.status_code == 200:
+            data = response.json()
 
-        self.open_chat(username)
+            print("User ID:", data["user_id"])
+
+            self.open_chat(username)
+
+        else:
+            print(response.json())
 
     def open_chat(self, username):
         self.chat = MainWindow(username)
