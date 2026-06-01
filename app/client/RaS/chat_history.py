@@ -1,6 +1,5 @@
 import os
 import json
-from datetime import datetime
 
 HISTORY_DIR = "chat_history"
 

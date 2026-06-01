@@ -26,7 +26,7 @@ async def on_message(message: AbstractIncomingMessage):
                 sender=int(sender),
                 target=int(MY_CLIENT_ID),
                 content=content,
-                is_outgoing=True
+                is_outgoing=False
             )
 
             await message.ack()
