@@ -31,11 +31,12 @@ class UserCreate(BaseModel):
     username: str
     password: str
 
-
 class UserLogin(BaseModel):
     username: str
     password: str
 
+class UserSearch(BaseModel):
+    username: str
 
 @app.post("/register")
 async def register(user: UserCreate):
@@ -79,5 +80,17 @@ async def login(user: UserLogin):
     }
 
 @app.get("/users")
-async def get_users():
-    return await get_all_users()
+async def get_users(user: UserSearch):
+    username, user_id = await get_all_users(user.username)
+
+    if username is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Username doesn't exist"
+        )
+    return {
+        "status": "ok",
+        "user_id": user_id,
+        "username": username
+    }
+

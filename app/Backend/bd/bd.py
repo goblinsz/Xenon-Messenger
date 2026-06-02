@@ -50,30 +50,26 @@ async def authenticate_user(name: str, password: str) -> Tuple[Optional[str], bo
             return name, user_id
     return None, False
 
-async def get_all_users(name: str) -> List[tuple]:
+async def get_all_users(name: str) -> Tuple[Optional[str], bool]:
     async with pool.acquire() as conn:
-        rows = await conn.fetch("SELECT user_id, name, email FROM users where name = $1;", name)
-        return [tuple(row) for row in rows]
+        rows = await conn.fetch("SELECT user_id, name FROM users where name = $1;", name)
+        if rows:
+            user_id = rows["user_id"]
+            username = rows["name"]
+            return username, user_id
+        return None, False
 
 async def delete_user_from_db(id: int) -> None:
     async with pool.acquire() as conn:
         await conn.execute("DELETE FROM users WHERE id = $1;", id)
 
-
 async def create_table_chat(id1: int, id2: int) -> None:
     min_id = min(id1, id2)
     max_id = max(id1, id2)
-    table_name = f"chat{min_id}{max_id}"  # Например: chat_47_123
+    table_name = f"chat{min_id}{max_id}"
 
     async with pool.acquire() as conn:
-        await conn.execute(f"""
-            CREATE TABLE IF NOT EXISTS "{table_name}" (
-                time VARCHAR,
-                sender VARCHAR(10),
-                target VARCHAR(10),
-                content VARCHAR(1000)
-            )
-        """)
+        await conn.execute(f"CREATE TABLE IF NOT EXISTS {table_name} (time VARCHAR, sender VARCHAR(10), target VARCHAR(10), content VARCHAR(1000))")
 
 async def filling_the_chat(id1: int, id2: int, content: str, time:str):
     min_id = min(id1, id2)
