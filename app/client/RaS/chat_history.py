@@ -1,5 +1,6 @@
 import os
 import json
+from pickletools import read_long1
 
 HISTORY_DIR = "chat_history"
 
@@ -43,3 +44,21 @@ def save_message(time:str, sender: int, target: int, content: str, is_outgoing: 
 
     with open(filename, 'w', encoding='utf-8') as f:
         json.dump(history, f, ensure_ascii=False, indent=2)
+
+
+def read_chat(sender: int, target: int):
+    filename = os.path.join(HISTORY_DIR, get_chat_filename(sender, target))
+
+    if not os.path.exists(filename):
+        return []
+
+    try:
+        with open(filename, 'r', encoding='utf-8') as f:
+            history = json.load(f)
+
+        history.sort(key=lambda msg: msg.get('time', ''))
+        return history
+
+    except (json.JSONDecodeError, IOError) as e:
+        print(f"❌ Ошибка чтения истории: {e}")
+        return []
