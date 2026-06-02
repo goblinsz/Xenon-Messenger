@@ -24,39 +24,39 @@ async def close_pool():
     if pool:
         await pool.close()
 
-async def register_user(name: str, password: str) -> Optional[int]:
+async def register_user(username: str, name: str, password: str) -> Optional[int]:
     hashed_password = await asyncio.to_thread(
         lambda: bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
     )
     async with pool.acquire() as conn:
-        user_id = await conn.fetchval(
-            "INSERT INTO users (name, password) VALUES ($1, $2) RETURNING id;",
-            name, hashed_password
+        id = await conn.fetchval(
+            "INSERT INTO users (username, name, password) VALUES ($1, $2, $3) RETURNING id;",
+            username, name, hashed_password
         )
-    return user_id
+    return id
 
-async def authenticate_user(name: str, password: str) -> Tuple[Optional[str], bool]:
+async def authenticate_user(username: str, password: str) -> Tuple[Optional[str], bool]:
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT name, password, user_id FROM users WHERE name = $1;",
-            name
+            "SELECT name, password, id FROM users WHERE username = $1;",
+            username
         )
     if row:
-        name, stored_password, user_id = row["name"], row["password"], row["user_id"]
+        name, stored_password, id = row["name"], row["password"], row["id"]
         is_valid = await asyncio.to_thread(
             bcrypt.checkpw, password.encode('utf-8'), stored_password.encode('utf-8')
         )
         if is_valid:
-            return name, user_id
+            return name, id
     return None, False
 
-async def get_all_users(name: str) -> Tuple[Optional[str], bool]:
+async def get_all_users(username: str) -> Tuple[Optional[str], bool]:
     async with pool.acquire() as conn:
-        rows = await conn.fetch("SELECT user_id, name FROM users where name = $1;", name)
+        rows = await conn.fetch("SELECT id, name FROM users where username = $1;", username)
         if rows:
-            user_id = rows["user_id"]
-            username = rows["name"]
-            return username, user_id
+            id = rows["id"]
+            name = rows["name"]
+            return name, id
         return None, False
 
 async def delete_user_from_db(id: int) -> None:

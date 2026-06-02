@@ -29,6 +29,7 @@ async def on_shutdown():
 
 class UserCreate(BaseModel):
     username: str
+    name: str
     password: str
 
 class UserLogin(BaseModel):
@@ -36,38 +37,37 @@ class UserLogin(BaseModel):
     password: str
 
 class UserSearch(BaseModel):
-    username: str
+    name: str
 
 @app.post("/register")
 async def register(user: UserCreate):
     try:
         await init_pool()
-        print(user.username, user.password)
-        user_id = await register_user(
+        id = await register_user(
             user.username,
+            user.name,
             user.password
         )
 
         return {
             "status": "ok",
-            "user_id": user_id
+            "id": id
         }
 
     except Exception as e:
-        print(f"❌ Ошибка регистрации: {e}")
         raise HTTPException(
             status_code=400,
-            detail=str(e) + user.username + user.username
+            detail=str(e)
         )
 
 @app.post("/login")
 async def login(user: UserLogin):
-    name, user_id = await authenticate_user(
+    username, id = await authenticate_user(
         user.username,
         user.password
     )
 
-    if user_id is False:
+    if id is False:
         raise HTTPException(
             status_code=401,
             detail="Wrong login or password"
@@ -75,22 +75,21 @@ async def login(user: UserLogin):
 
     return {
         "status": "ok",
-        "user_id": user_id,
-        "username": name
+        "id": id,
+        "username": username
     }
 
 @app.get("/users")
 async def get_users(user: UserSearch):
-    username, user_id = await get_all_users(user.username)
+    name, id = await get_all_users(user.username)
 
-    if username is None:
+    if name is None:
         raise HTTPException(
             status_code=401,
-            detail="Username doesn't exist"
+            detail="Name doesn't exist"
         )
     return {
         "status": "ok",
-        "user_id": user_id,
-        "username": username
+        "id": id,
+        "username": name
     }
-
