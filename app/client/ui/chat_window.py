@@ -1,4 +1,3 @@
-import asyncio
 import sys
 from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QLabel, QHBoxLayout, QVBoxLayout
 from ui_chat import Ui_MainWindow as UiChat
