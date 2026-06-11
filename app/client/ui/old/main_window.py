@@ -9,7 +9,7 @@ def main(page: ft.Page):
     page.window_min_width = 800
     page.window_min_height = 600
 
-    contacts_File = "contacts.json"
+    contacts_File = "../contacts.json"
 
 
     def load_contacts():
@@ -146,14 +146,20 @@ def main(page: ft.Page):
         chat_list.controls.append(message_bubble)
         page.update()
 
-    def send_message(e):
+    async def send_message(e):
         text = msg_input.value.strip()
         if not text:
             return
 
         add_message(text, is_mine=True)
+
         msg_input.value = ""
-        msg_input.focus()
+
+        # Исправление: добавляем await
+        await msg_input.focus()
+
+        page.update()
+
 
     msg_input = ft.TextField(
         hint_text="Введите сообщение...",
@@ -252,4 +258,4 @@ def main(page: ft.Page):
     add_message("Привет! Как продвигается проект?", is_mine=False)
     add_message("Привет! Делаю интерфейс чата на Flet, выглядит отлично.", is_mine=True)
 
-ft.app(target=main)
+ft.run(main)

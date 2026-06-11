@@ -1,14 +1,1 @@
-[
-    {
-        "name": "Jane Doe",
-        "role": "Product Manager",
-        "initials": "JD",
-        "color": "BLUE_200"
-    },
-    {
-        "name": "John Doe",
-        "role": "Marketing",
-        "initials": "JD",
-        "color": "GREEN_200"
-    }
-]
+["Caveman Bob", "Dino Hunter", "JSON Bear", "Data Wolf", "asd"]

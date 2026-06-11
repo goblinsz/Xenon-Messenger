@@ -1,95 +1,104 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-
+from datetime import datetime
 from bd.bd import (
     init_pool,
     close_pool,
     register_user,
     authenticate_user,
-    get_all_users
+    get_all_users_list,
+    create_table_chat,
+    filling_the_chat,
+    get_chat_history
 )
+from sendk import send
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await on_startup()
+    await init_pool()
     yield
-    await on_shutdown()
+    await close_pool()
+
 
 app = FastAPI(lifespan=lifespan)
 
-
-async def on_startup():
-    print("🚀 FastAPI запускается!")
-    await init_pool()
-
-async def on_shutdown():
-    print("🛑 FastAPI останавливается!")
-    await close_pool()
 
 class UserCreate(BaseModel):
     username: str
     name: str
     password: str
 
+
 class UserLogin(BaseModel):
     username: str
     password: str
 
-class UserSearch(BaseModel):
-    name: str
+
+class MessageSend(BaseModel):
+    sender_id: int
+    target_id: int
+    content: str
+
 
 @app.post("/register")
 async def register(user: UserCreate):
     try:
-        await init_pool()
-        id = await register_user(
-            user.username,
-            user.name,
-            user.password
-        )
-
-        return {
-            "status": "ok",
-            "id": id
-        }
-
+        id = await register_user(user.username, user.name, user.password)
+        return {"status": "ok", "id": id}
     except Exception as e:
-        raise HTTPException(
-            status_code=400,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=400, detail=str(e))
+
 
 @app.post("/login")
 async def login(user: UserLogin):
-    username, id = await authenticate_user(
-        user.username,
-        user.password
-    )
+    username, id = await authenticate_user(user.username, user.password)
+    if not id:
+        raise HTTPException(status_code=401, detail="Wrong login or password")
+    return {"status": "ok", "id": id, "username": username}
 
-    if id is False:
-        raise HTTPException(
-            status_code=401,
-            detail="Wrong login or password"
+
+@app.post("/send_message")
+async def send_message_endpoint(msg: MessageSend):
+    try:
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        await create_table_chat(msg.sender_id, msg.target_id)
+        await filling_the_chat(msg.sender_id, msg.target_id, msg.content, timestamp)
+
+        await send(
+            target_id=str(msg.target_id),
+            content=msg.content,
+            sender=str(msg.sender_id),
+            timestamp=timestamp
         )
 
-    return {
-        "status": "ok",
-        "id": id,
-        "username": username
-    }
+        return {"status": "ok", "message": "Sent to queue"}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/messages/{id1}/{id2}")
+async def get_messages(id1: int, id2: int):
+    try:
+        history = await get_chat_history(id1, id2)
+        return {"status": "ok", "messages": history}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/users")
-async def get_users(user: UserSearch):
-    name, id = await get_all_users(user.username)
+async def get_users(username: str):
+    name, id = await get_all_users(username)
+    if not name:
+        raise HTTPException(status_code=404, detail="Name doesn't exist")
+    return {"status": "ok", "id": id, "username": name}
 
-    if name is None:
-        raise HTTPException(
-            status_code=401,
-            detail="Name doesn't exist"
-        )
-    return {
-        "status": "ok",
-        "id": id,
-        "username": name
-    }
+
+@app.get("/users/all")
+async def get_all_users():
+    try:
+        users = await get_all_users_list()
+        return {"status": "ok", "users": users}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
