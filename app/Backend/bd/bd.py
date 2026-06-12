@@ -107,3 +107,13 @@ async def filling_the_chat(id1: int, id2: int, content: str, time_str: str):
             f"INSERT INTO {table_name} (time, sender, target, content) VALUES ($1, $2, $3, $4);",
             time_str, str(id1), str(id2), content
         )
+
+async def get_user_by_username(username: str):
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT id, username, name FROM users WHERE username = $1;",
+            username
+        )
+        if row:
+            return {"id": row["id"], "username": row["username"], "name": row["name"]}
+        return None

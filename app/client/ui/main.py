@@ -3,9 +3,11 @@ import httpx
 import aio_pika
 import json
 import asyncio
+import os
 
 API_URL = "http://127.0.0.1:8000"
 RABBIT_URL = "amqp://g:g@192.168.1.65/"
+CONTACTS_FILE = "my_contacts.json"
 
 
 class MainWindow:
@@ -15,6 +17,7 @@ class MainWindow:
         self.my_name = my_name
         self.on_logout = on_logout
         self.current_friend_id = None
+        self.my_contacts = self.load_contacts_json()
 
         self.status_text = ft.Text(f"Logged in as: {my_name} (ID: {my_id})", size=16, color="gray", weight="bold")
         self.message_history = ft.ListView(expand=True, spacing=10, padding=20, auto_scroll=True, controls=[])
@@ -24,10 +27,22 @@ class MainWindow:
         self.send_btn = ft.Button("Send", icon=ft.Icons.SEND, on_click=self.send_message)
         self.msg_input.on_submit = self.send_message
 
+        self.toolbar = ft.Row(
+            controls=[
+                ft.Text("Xenon Messenger", size=20, weight="bold"),
+                ft.Row([
+                    ft.IconButton(ft.Icons.PERSON_ADD, tooltip="Add Contact",
+                                  on_click=lambda _: self.show_add_contact()),
+                    ft.IconButton(ft.Icons.SETTINGS, tooltip="Settings", on_click=lambda _: self.show_settings()),
+                    ft.IconButton(ft.Icons.LOGOUT, tooltip="Logout", on_click=lambda _: self.on_logout())
+                ], spacing=10)
+            ],
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN
+        )
+
         self.left_column = ft.Column(
             controls=[
-                ft.Row([ft.Text("My Tribe", size=20, weight="bold"),
-                        ft.IconButton(ft.Icons.LOGOUT, tooltip="Logout", on_click=lambda _: self.on_logout())]),
+                ft.Text("My contacts", size=20, weight="bold"),
                 ft.Divider(),
                 self.friends_list
             ],
@@ -44,10 +59,142 @@ class MainWindow:
             ]
         )
 
-        self.view = ft.Row(expand=True, controls=[self.left_column, self.right_column])
+        self.view = ft.Column(
+            expand=True,
+            controls=[
+                self.toolbar,
+                ft.Divider(),
+                ft.Row(expand=True, controls=[self.left_column, self.right_column])
+            ]
+        )
 
+        self.build_overlays()
         asyncio.create_task(self.load_contacts())
         asyncio.create_task(self.listen_to_my_queue())
+
+    def load_contacts_json(self):
+        if os.path.exists(CONTACTS_FILE):
+            try:
+                with open(CONTACTS_FILE, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception:
+                return []
+        return []
+
+    def save_contacts_json(self):
+        with open(CONTACTS_FILE, "w", encoding="utf-8") as f:
+            json.dump(self.my_contacts, f, indent=4)
+
+    def build_overlays(self):
+        def toggle_theme(e):
+            self.page.theme_mode = ft.ThemeMode.DARK if self.page.theme_mode == ft.ThemeMode.LIGHT else ft.ThemeMode.LIGHT
+            self.page.update()
+
+        self.settings_overlay = ft.Container(
+            visible=False,
+            content=ft.Card(
+                content=ft.Container(
+                    content=ft.Column([
+                        ft.Text("Settings", size=20, weight="bold"),
+                        ft.Switch(label="Dark Mode", value=(self.page.theme_mode == ft.ThemeMode.DARK),
+                                  on_change=toggle_theme),
+                        ft.Row([ft.TextButton("Close", on_click=lambda _: self.hide_overlays())],
+                               alignment=ft.MainAxisAlignment.END)
+                    ], tight=True, spacing=20),
+                    padding=20, width=300
+                )
+            ),
+            alignment=ft.Alignment.CENTER,
+            bgcolor="#80000000",
+            expand=True
+        )
+
+
+        self.add_username_input = ft.TextField(hint_text="Enter exact username", autofocus=True)
+        self.add_error_text = ft.Text("", color="red", size=12)
+
+        self.add_contact_overlay = ft.Container(
+            visible=False,
+            content=ft.Card(
+                content=ft.Container(
+                    content=ft.Column([
+                        ft.Text("Add Contact", size=20, weight="bold"),
+                        self.add_username_input,
+                        self.add_error_text,
+                        ft.Row([
+                            ft.TextButton("Cancel", on_click=lambda _: self.hide_overlays()),
+                            ft.TextButton("Search & Add", on_click=self.add_new_contact)
+                        ], alignment=ft.MainAxisAlignment.END)
+                    ], tight=True, spacing=10),
+                    padding=20, width=300
+                )
+            ),
+            alignment=ft.Alignment.CENTER,
+            bgcolor="#80000000",
+            expand=True
+        )
+
+    def show_settings(self):
+        self.settings_overlay.visible = True
+        self.page.update()
+
+    def show_add_contact(self):
+        self.add_username_input.value = ""
+        self.add_error_text.value = ""
+        self.add_contact_overlay.visible = True
+        self.page.update()
+
+    def hide_overlays(self):
+        self.settings_overlay.visible = False
+        self.add_contact_overlay.visible = False
+        self.page.update()
+
+    async def add_new_contact(self, e):
+        username = self.add_username_input.value.strip()
+        if not username:
+            self.add_error_text.value = "Username cannot be empty"
+            self.page.update()
+            return
+
+        self.add_error_text.value = "Searching..."
+        self.page.update()
+
+
+        async with httpx.AsyncClient(trust_env=False) as client:
+            try:
+                resp = await client.get(f"{API_URL}/users", params={"username": username})
+                if resp.status_code == 200:
+                    data = resp.json()
+                    user = data.get("user", {})
+                    user_id = str(user.get("id"))
+
+                    if user_id == self.my_id:
+                        self.add_error_text.value = "You cannot add yourself!"
+                        self.page.update()
+                        return
+
+
+                    if any(c["id"] == user_id for c in self.my_contacts):
+                        self.add_error_text.value = "Already in your contacts!"
+                        self.page.update()
+                        return
+
+
+                    self.my_contacts.append({
+                        "id": user_id,
+                        "username": user.get("username"),
+                        "name": user.get("name")
+                    })
+                    self.save_contacts_json()
+
+                    self.hide_overlays()
+                    await self.load_contacts()
+                else:
+                    self.add_error_text.value = "User not found on server."
+                    self.page.update()
+            except Exception as ex:
+                self.add_error_text.value = f"Server error: {ex}"
+                self.page.update()
 
     def select_friend(self, friend_id: str, friend_name: str):
         self.current_friend_id = friend_id
@@ -57,26 +204,17 @@ class MainWindow:
         asyncio.create_task(self.load_chat_history(friend_id))
 
     async def load_contacts(self):
-        async with httpx.AsyncClient(trust_env=False) as client:
-            try:
-                resp = await client.get(f"{API_URL}/users/all")
-                if resp.status_code == 200:
-                    data = resp.json()
-                    self.friends_list.controls.clear()
-                    for user in data.get("users", []):
-                        if str(user["id"]) != self.my_id:
-                            self.friends_list.controls.append(
-                                ft.ListTile(
-                                    title=ft.Text(user["name"]),
-                                    subtitle=ft.Text(f"@{user['username']}"),
-                                    leading=ft.Icon(ft.Icons.PERSON),
-                                    on_click=lambda e, uid=str(user["id"]), uname=user["name"]: self.select_friend(uid,
-                                                                                                                   uname)
-                                )
-                            )
-                    self.page.update()
-            except Exception as ex:
-                print(f"Load contacts error: {ex}")
+        self.friends_list.controls.clear()
+        for user in self.my_contacts:
+            self.friends_list.controls.append(
+                ft.ListTile(
+                    title=ft.Text(user["name"]),
+                    subtitle=ft.Text(f"@{user['username']}"),
+                    leading=ft.Icon(ft.Icons.PERSON),
+                    on_click=lambda e, uid=user["id"], uname=user["name"]: self.select_friend(uid, uname)
+                )
+            )
+        self.page.update()
 
     async def load_chat_history(self, friend_id: str):
         async with httpx.AsyncClient(trust_env=False) as client:

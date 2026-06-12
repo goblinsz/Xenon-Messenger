@@ -10,7 +10,8 @@ from bd.bd import (
     get_all_users_list,
     create_table_chat,
     filling_the_chat,
-    get_chat_history
+    get_chat_history,
+    get_user_by_username
 )
 from sendk import send
 
@@ -88,11 +89,11 @@ async def get_messages(id1: int, id2: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/users")
-async def get_users(username: str):
-    name, id = await get_all_users(username)
-    if not name:
-        raise HTTPException(status_code=404, detail="Name doesn't exist")
-    return {"status": "ok", "id": id, "username": name}
+async def get_user(username: str):
+    user = await get_user_by_username(username)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"status": "ok", "user": user}
 
 
 @app.get("/users/all")

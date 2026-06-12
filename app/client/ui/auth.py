@@ -1,6 +1,5 @@
 import flet as ft
 import httpx
-import asyncio
 
 API_URL = "http://127.0.0.1:8000"
 
@@ -13,27 +12,47 @@ def build_auth_window(page, on_success):
 
     is_registering = False
 
+    # Define buttons FIRST so toggle_mode can see them
+    action_btn = ft.Button("Login", width=300)
+    toggle_btn = ft.TextButton("Need an account? Register")
+
     def toggle_mode(e):
         nonlocal is_registering
+
+        # 1. Flip the state FIRST
         is_registering = not is_registering
+
+        # 2. Update UI based on the NEW state
         name_field.visible = is_registering
-        action_btn.text = "Register" if is_registering else "Login"
-        toggle_btn.text = "Already have an account? Login" if is_registering else "Need an account? Register"
+
+        if is_registering:
+            action_btn.text = "Register"
+            toggle_btn.text = "Already have an account? Login"
+        else:
+            action_btn.text = "Login"
+            toggle_btn.text = "Need an account? Register"
+
         error_text.value = ""
-        page.update()
+
+        # 3. FORCE UPDATE each widget individually
+        # This is the missing piece! page.update() is often too slow or misses nested widgets.
+        name_field.update()
+        action_btn.update()
+        toggle_btn.update()
+        error_text.update()
 
     async def handle_auth(e):
         if not username.value or not password.value:
             error_text.value = "Username and password required"
-            page.update()
+            error_text.update()
             return
         if is_registering and not name_field.value:
             error_text.value = "Full name required for registration"
-            page.update()
+            error_text.update()
             return
 
         error_text.value = "Processing..."
-        page.update()
+        error_text.update()
 
         endpoint = "/register" if is_registering else "/login"
         payload = {"username": username.value, "password": password.value}
@@ -48,13 +67,13 @@ def build_auth_window(page, on_success):
                     on_success(str(data["id"]), data.get("username", username.value))
                 else:
                     error_text.value = resp.json().get("detail", "Authentication failed")
-                    page.update()
+                    error_text.update()
             except Exception as ex:
                 error_text.value = f"Server error: {ex}"
-                page.update()
+                error_text.update()
 
-    action_btn = ft.Button("Login", on_click=handle_auth, width=300)
-    toggle_btn = ft.TextButton("Need an account? Register", on_click=toggle_mode)
+    action_btn.on_click = handle_auth
+    toggle_btn.on_click = toggle_mode
 
     return ft.Column(
         controls=[
