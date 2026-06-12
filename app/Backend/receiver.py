@@ -4,7 +4,7 @@ import aio_pika
 from aio_pika.abc import AbstractIncomingMessage
 from bd.bd import create_table_chat, filling_the_chat, init_pool, close_pool
 
-RABBIT_URL = "amqp://g:g@192.168.1.65/"
+RABBIT_URL = "amqp://g:g@10.0.0.103/"
 EXCHANGE_NAME = "direct_exchange"
 MY_CLIENT_ID = "server"
 

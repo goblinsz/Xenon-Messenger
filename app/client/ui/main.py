@@ -6,7 +6,7 @@ import asyncio
 import os
 
 API_URL = "http://127.0.0.1:8000"
-RABBIT_URL = "amqp://g:g@192.168.1.65/"
+RABBIT_URL = "amqp://g:g@10.0.0.103/"
 CONTACTS_FILE = "my_contacts.json"
 
 

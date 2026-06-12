@@ -5,9 +5,9 @@ from typing import Optional, Tuple
 
 DB_CONFIG = {
     "database": "postgres",
-    "user": "admin",
+    "user": "postgres",
     "password": "postgres",
-    "host": "192.168.1.65",
+    "host": "10.0.0.103",
     "port": 5432
 }
 

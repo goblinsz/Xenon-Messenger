@@ -1,7 +1,7 @@
 import json
 import aio_pika
 
-RABBIT_URL = "amqp://g:g@192.168.1.65/"
+RABBIT_URL = "amqp://g:g@10.0.0.103/"
 EXCHANGE_NAME = "direct_exchange"
 
 
