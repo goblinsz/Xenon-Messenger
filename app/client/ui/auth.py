@@ -1,7 +1,7 @@
 import flet as ft
 import httpx
 
-API_URL = "http://127.0.0.1:8000"
+API_URL = "http://10.0.0.103:8000"
 
 
 def build_auth_window(page, on_success):

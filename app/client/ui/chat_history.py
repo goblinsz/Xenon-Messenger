@@ -5,13 +5,13 @@ import json
 HISTORY_DIR = "chat_history"
 
 
-def get_chat_filename(id1: int, id2: int) -> str:
+async def get_chat_filename(id1: int, id2: int) -> str:
     min_id = min(id1, id2)
     max_id = max(id1, id2)
     return f"chat_{min_id}_{max_id}.json"
 
 
-def save_message(time:str, sender: int, target: int, content: str, is_outgoing: bool):
+async def save_message(time:str, sender: int, target: int, content: str, is_outgoing: bool):
     """
     Сохраняет сообщение в локальный JSON-файл.
     :param time: Время отправки
@@ -46,19 +46,19 @@ def save_message(time:str, sender: int, target: int, content: str, is_outgoing: 
         json.dump(history, f, ensure_ascii=False, indent=2)
 
 
-def read_chat(sender: int, target: int):
+async def read_chat(sender: int, target: int):
     filename = os.path.join(HISTORY_DIR, get_chat_filename(sender, target))
 
     if not os.path.exists(filename):
-        return []
+        return "a"
 
     try:
         with open(filename, 'r', encoding='utf-8') as f:
             history = json.load(f)
 
-        history.sort(key=lambda msg: msg.get('time', ''))
+        history.sort(key=lambda msg: msg.get('time', 'sender', 'target', 'content', 'is_outgoing'))
         return history
 
     except (json.JSONDecodeError, IOError) as e:
         print(f"❌ Ошибка чтения истории: {e}")
-        return []
+        return "a"

@@ -2,7 +2,7 @@ import json
 import aio_pika
 import time
 from datetime import datetime
-from chat_history import save_message
+from app.client.ui.chat_history import save_message
 
 RABBIT_URL = "amqp://g:g@10.0.0.103:15672/"
 EXCHANGE_NAME = "direct_exchange"

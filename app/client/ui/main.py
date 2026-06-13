@@ -1,11 +1,14 @@
+from datetime import datetime
+
 import flet as ft
 import httpx
 import aio_pika
 import json
 import asyncio
 import os
+from chat_history import read_chat, save_message
 
-API_URL = "http://127.0.0.1:8000"
+API_URL = "http://10.0.0.103:8000"
 RABBIT_URL = "amqp://g:g@10.0.0.103/"
 CONTACTS_FILE = "my_contacts.json"
 
@@ -217,29 +220,46 @@ class MainWindow:
         self.page.update()
 
     async def load_chat_history(self, friend_id: str):
-        async with httpx.AsyncClient(trust_env=False) as client:
-            try:
-                resp = await client.get(f"{API_URL}/messages/{self.my_id}/{friend_id}")
-                if resp.status_code == 200:
-                    data = resp.json()
-                    messages = data.get("messages", [])
-                    self.message_history.controls.clear()
+        history = await read_chat(int(self.my_id), int(friend_id))
+        if history == "a":
+            async with httpx.AsyncClient(trust_env=False) as client:
+                try:
+                    resp = await client.get(f"{API_URL}/messages/{self.my_id}/{friend_id}")
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        messages = data.get("messages", [])
+                        self.message_history.controls.clear()
 
-                    for msg in messages:
-                        is_mine = str(msg["sender"]) == str(self.my_id)
-                        bubble = ft.Container(
-                            content=ft.Text(f"{'You' if is_mine else 'Friend'}: {msg['content']}", size=16,
-                                            color="black"),
-                            bgcolor="#DCF8C6" if is_mine else "#E5E5EA",
-                            border_radius=15,
-                            padding=15,
-                            width=400,
-                            alignment=ft.Alignment.CENTER_RIGHT if is_mine else ft.Alignment.CENTER_LEFT
-                        )
-                        self.message_history.controls.append(bubble)
-                    self.page.update()
-            except Exception as ex:
-                print(f"Load history error: {ex}")
+                        for msg in messages:
+                            is_mine = str(msg["sender"]) == str(self.my_id)
+                            bubble = ft.Container(
+                                content=ft.Text(f"{'You' if is_mine else 'Friend'}: {msg['content']}", size=16,
+                                                color="black"),
+                                bgcolor="#DCF8C6" if is_mine else "#E5E5EA",
+                                border_radius=15,
+                                padding=15,
+                                width=400,
+                                alignment=ft.Alignment.CENTER_RIGHT if is_mine else ft.Alignment.CENTER_LEFT
+                            )
+                            self.message_history.controls.append(bubble)
+                        self.page.update()
+                except Exception as ex:
+                    print(f"Load history error: {ex}")
+        else:
+            for h in history:
+                is_mine = str(h["sender"]) == str(self.my_id)
+                bubble = ft.Container(
+                    content=ft.Text(f"{'You' if is_mine else 'Friend'}: {h['content']}", size=16,
+                                    color="black"),
+                    bgcolor="#DCF8C6" if is_mine else "#E5E5EA",
+                    border_radius=15,
+                    padding=15,
+                    width=400,
+                    alignment=ft.Alignment.CENTER_RIGHT if is_mine else ft.Alignment.CENTER_LEFT
+                )
+                self.message_history.controls.append(bubble)
+            self.page.update()
+
 
     async def listen_to_my_queue(self):
         try:
@@ -267,13 +287,14 @@ class MainWindow:
                             )
                             self.message_history.controls.append(bubble)
                             self.page.update()
+                            await save_message(data.get('timestamp'), int(sender), int(self.my_id), content, False)
 
                 await queue.consume(on_message)
                 await asyncio.Future()
         except Exception as e:
             print(f"Listener error: {e}")
 
-    def send_message(self, e):
+    async def send_message(self, e):
         if not self.current_friend_id:
             return
 
@@ -301,3 +322,4 @@ class MainWindow:
             asyncio.create_task(do_send())
             self.msg_input.value = ""
             self.page.update()
+            await save_message(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), int(self.my_id), int(self.current_friend_id), text, True)

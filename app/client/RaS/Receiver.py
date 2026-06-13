@@ -2,7 +2,7 @@ import asyncio
 import json
 import aio_pika
 from aio_pika.abc import AbstractIncomingMessage
-from chat_history import save_message
+from app.client.ui.chat_history import save_message
 
 
 RABBIT_URL = "amqp://g:g@10.0.0.103/"
