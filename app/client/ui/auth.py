@@ -11,24 +11,17 @@ def build_auth_window(page: ft.Page, on_success):
 
     username = ft.TextField(label="Username", width=300)
     password = ft.TextField(label="Password", password=True, width=300)
-    name_field = ft.TextField(label="Full Name (for registration)", width=300, visible=False)
+    name_field = ft.TextField(label="Full Name (for registration)", width=300)
     error_text = ft.Text("", color="red", size=14)
 
     is_registering = False
-    action_btn = ft.Button("Login", width=300)
-    toggle_btn = ft.TextButton("Need an account? Register")
 
     accounts_view = ft.Column(horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=10)
+
     login_view = ft.Column(
-        controls=[username, password, name_field, error_text, action_btn, toggle_btn],
         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
         visible=not bool(saved_accounts)
     )
-
-    def show_login_form(e=None):
-        accounts_view.visible = False
-        login_view.visible = True
-        page.update()
 
     async def execute_login(uname, pwd, name_val=None, is_reg=False):
         error_text.value = "Processing..."
@@ -90,23 +83,10 @@ def build_auth_window(page: ft.Page, on_success):
             )
         accounts_view.controls.append(ft.TextButton("Add another account", on_click=show_login_form))
 
-    if saved_accounts:
-        build_account_list()
-
-    def toggle_mode(e):
-        nonlocal is_registering
-        is_registering = not is_registering
-
-        name_field.visible = is_registering
-
-        action_btn.text = "Register" if is_registering else "Login"
-        toggle_btn.text = "Already have an account? Login" if is_registering else "Need an account? Register"
-
-        error_text.value = ""
-        action_btn.update()
-        toggle_btn.update()
-        name_field.update()
-        login_view.update()
+    def show_login_form(e=None):
+        accounts_view.visible = False
+        login_view.visible = True
+        rebuild_form()
         page.update()
 
     async def handle_auth(e):
@@ -120,8 +100,37 @@ def build_auth_window(page: ft.Page, on_success):
             return
         await execute_login(username.value, password.value, name_field.value, is_registering)
 
-    action_btn.on_click = handle_auth
-    toggle_btn.on_click = toggle_mode
+    def rebuild_form():
+        nonlocal is_registering
+
+        name_field.visible = is_registering
+
+        action_btn = ft.Button(
+            "Register" if is_registering else "Login",
+            width=300,
+            on_click=handle_auth
+        )
+        toggle_btn = ft.TextButton(
+            "Already have an account? Login" if is_registering else "Need an account? Register",
+            on_click=toggle_mode
+        )
+
+        login_view.controls = [
+            username, password, name_field, error_text, action_btn, toggle_btn
+        ]
+
+    def toggle_mode(e):
+        nonlocal is_registering
+        is_registering = not is_registering
+        error_text.value = ""
+
+        rebuild_form()
+        page.update()
+
+    if saved_accounts:
+        build_account_list()
+    else:
+        rebuild_form()
 
     return ft.Column(
         controls=[
