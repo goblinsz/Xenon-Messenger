@@ -11,7 +11,7 @@ def build_auth_window(page: ft.Page, on_success):
 
     username = ft.TextField(label="Username", width=300)
     password = ft.TextField(label="Password", password=True, width=300)
-    name_field = ft.TextField(label="Full Name (for registration)", width=300)
+    name_field = ft.TextField(label="Full Name", width=300)
     error_text = ft.Text("", color="red", size=14)
 
     is_registering = False
