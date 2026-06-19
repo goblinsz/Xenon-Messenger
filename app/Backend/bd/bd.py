@@ -1,7 +1,7 @@
 import asyncio
 import asyncpg
 import bcrypt
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List, Dict
 
 DB_CONFIG = {
     "database": "postgres",
@@ -10,13 +10,13 @@ DB_CONFIG = {
     "host": "10.0.0.103",
     "port": 5432
 }
-
 pool: Optional[asyncpg.Pool] = None
 
 async def init_pool():
     global pool
     if not pool:
         pool = await asyncpg.create_pool(**DB_CONFIG, min_size=5, max_size=20)
+        await init_db_schema()
 
 async def close_pool():
     global pool
@@ -24,96 +24,118 @@ async def close_pool():
         await pool.close()
         pool = None
 
-async def register_user(username: str, name: str, password: str) -> Optional[int]:
-    hashed_password = await asyncio.to_thread(
-        lambda: bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-    )
+async def init_db_schema():
     async with pool.acquire() as conn:
-        id = await conn.fetchval(
-            "INSERT INTO users (username, name, password) VALUES ($1, $2, $3) RETURNING id;",
-            username, name, hashed_password
-        )
-    return id
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY, username VARCHAR(50) UNIQUE NOT NULL, 
+                name VARCHAR(100) NOT NULL, password VARCHAR(100) NOT NULL, 
+                strict_mode BOOLEAN DEFAULT FALSE
+            );
+            CREATE TABLE IF NOT EXISTS blocked_users (
+                blocker_id INT REFERENCES users(id), blocked_id INT REFERENCES users(id),
+                PRIMARY KEY (blocker_id, blocked_id)
+            );
+            CREATE TABLE IF NOT EXISTS allowed_contacts (
+                user_id INT REFERENCES users(id), allowed_id INT REFERENCES users(id),
+                PRIMARY KEY (user_id, allowed_id)
+            );
+            CREATE TABLE IF NOT EXISTS conversations (
+                id SERIAL PRIMARY KEY, is_group BOOLEAN DEFAULT FALSE, name VARCHAR(100)
+            );
+            CREATE TABLE IF NOT EXISTS participants (
+                conversation_id INT REFERENCES conversations(id), user_id INT REFERENCES users(id),
+                PRIMARY KEY (conversation_id, user_id)
+            );
+            CREATE TABLE IF NOT EXISTS messages (
+                id SERIAL PRIMARY KEY, conversation_id INT REFERENCES conversations(id), 
+                sender_id INT REFERENCES users(id), content TEXT NOT NULL, created_at VARCHAR(50) NOT NULL
+            );
+        """)
+
+async def register_user(username: str, name: str, password: str) -> int:
+    hashed = await asyncio.to_thread(lambda: bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8'))
+    async with pool.acquire() as conn:
+        try:
+            return await conn.fetchval("INSERT INTO users (username, name, password) VALUES ($1, $2, $3) RETURNING id;", username, name, hashed)
+        except asyncpg.exceptions.UniqueViolationError:
+            raise Exception("Username already exists")
 
 async def authenticate_user(username: str, password: str) -> Tuple[Optional[str], int]:
     async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            "SELECT name, password, id FROM users WHERE username = $1;",
-            username
-        )
-        if row:
-            name, stored_password, id = row["name"], row["password"], row["id"]
-            is_valid = await asyncio.to_thread(
-                bcrypt.checkpw, password.encode('utf-8'), stored_password.encode('utf-8')
-            )
-            if is_valid:
-                return name, id
+        row = await conn.fetchrow("SELECT name, password, id FROM users WHERE username = $1;", username)
+        if row and await asyncio.to_thread(bcrypt.checkpw, password.encode('utf-8'), row["password"].encode('utf-8')):
+            return row["name"], row["id"]
     return None, 0
-
-async def get_all_users_list():
-    async with pool.acquire() as conn:
-        rows = await conn.fetch("SELECT id, username, name FROM users;")
-        return [{"id": row["id"], "username": row["username"], "name": row["name"]} for row in rows]
-
-
-async def get_chat_history(id1: int, id2: int):
-    min_id = min(id1, id2)
-    max_id = max(id1, id2)
-    table_name = f"chat_{min_id}_{max_id}"
-
-    async with pool.acquire() as conn:
-        exists = await conn.fetchval(
-            "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = $1)",
-            table_name
-        )
-        if not exists:
-            return []
-
-        rows = await conn.fetch(
-            f"SELECT time, sender, target, content FROM {table_name} ORDER BY time ASC;"
-        )
-
-        return [
-            {
-                "time": row["time"],
-                "sender": str(row["sender"]),
-                "target": str(row["target"]),
-                "content": row["content"]
-            }
-            for row in rows
-        ]
-
-async def create_table_chat(id1: int, id2: int) -> None:
-    min_id = min(id1, id2)
-    max_id = max(id1, id2)
-    table_name = f"chat_{min_id}_{max_id}"
-    async with pool.acquire() as conn:
-        await conn.execute(f"""
-            CREATE TABLE IF NOT EXISTS {table_name} (
-                time VARCHAR, 
-                sender VARCHAR(10), 
-                target VARCHAR(10), 
-                content VARCHAR(1000)
-            )
-        """)
-
-async def filling_the_chat(id1: int, id2: int, content: str, time_str: str):
-    min_id = min(id1, id2)
-    max_id = max(id1, id2)
-    table_name = f"chat_{min_id}_{max_id}"
-
-    async with pool.acquire() as conn:
-        await conn.execute(
-            f"INSERT INTO {table_name} (time, sender, target, content) VALUES ($1, $2, $3, $4);",
-            time_str, str(id1), str(id2), content
-        )
 
 async def get_user_by_username(username: str):
     async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            "SELECT id, username, name FROM users WHERE username = $1;",
-            username
-        )
-        if row:
-            return {"id": row["id"], "username": row["username"], "name": row["name"]}
-        return None
+        row = await conn.fetchrow("SELECT id, username, name FROM users WHERE username = $1;", username)
+        return dict(row) if row else None
+
+async def get_user_profile_by_id(user_id: int):
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT id, username, name FROM users WHERE id = $1;", user_id)
+        return dict(row) if row else None
+
+async def get_all_users_list():
+    async with pool.acquire() as conn:
+        return [dict(r) for r in await conn.fetch("SELECT id, username, name FROM users;")]
+
+async def block_user(blocker_id: int, blocked_id: int) -> None:
+    async with pool.acquire() as conn:
+        await conn.execute("INSERT INTO blocked_users (blocker_id, blocked_id) VALUES ($1, $2) ON CONFLICT DO NOTHING;", blocker_id, blocked_id)
+
+async def is_blocked(blocker_id: int, blocked_id: int) -> bool:
+    async with pool.acquire() as conn:
+        return (await conn.fetchval("SELECT 1 FROM blocked_users WHERE blocker_id = $1 AND blocked_id = $2;", blocker_id, blocked_id)) is not None
+
+async def set_strict_mode(user_id: int, enabled: bool) -> None:
+    async with pool.acquire() as conn:
+        await conn.execute("UPDATE users SET strict_mode = $1 WHERE id = $2;", enabled, user_id)
+
+async def is_strict_mode(user_id: int) -> bool:
+    async with pool.acquire() as conn:
+        val = await conn.fetchval("SELECT strict_mode FROM users WHERE id = $1;", user_id)
+        return bool(val)
+
+async def update_whitelist(user_id: int, allowed_ids: list[int]) -> None:
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            await conn.execute("DELETE FROM allowed_contacts WHERE user_id = $1;", user_id)
+            if allowed_ids:
+                await conn.executemany("INSERT INTO allowed_contacts (user_id, allowed_id) VALUES ($1, $2);", [(user_id, aid) for aid in allowed_ids])
+
+async def is_sender_allowed(target_id: int, sender_id: int) -> bool:
+    async with pool.acquire() as conn:
+        return (await conn.fetchval("SELECT 1 FROM allowed_contacts WHERE user_id = $1 AND allowed_id = $2;", target_id, sender_id)) is not None
+
+async def get_or_create_direct_conversation(user1_id: int, user2_id: int) -> int:
+    async with pool.acquire() as conn:
+        conv_id = await conn.fetchval("""
+            SELECT c.id FROM conversations c 
+            JOIN participants p1 ON c.id = p1.conversation_id 
+            JOIN participants p2 ON c.id = p2.conversation_id
+            WHERE c.is_group = FALSE AND p1.user_id = $1 AND p2.user_id = $2;
+        """, user1_id, user2_id)
+        if conv_id: return conv_id
+        async with conn.transaction():
+            conv_id = await conn.fetchval("INSERT INTO conversations (is_group) VALUES (FALSE) RETURNING id;")
+            await conn.execute("INSERT INTO participants (conversation_id, user_id) VALUES ($1, $2), ($1, $3);", conv_id, user1_id, user2_id)
+            return conv_id
+
+async def save_message_db(conversation_id: int, sender_id: int, content: str, time_str: str):
+    async with pool.acquire() as conn:
+        await conn.execute("INSERT INTO messages (conversation_id, sender_id, content, created_at) VALUES ($1, $2, $3, $4);", conversation_id, sender_id, content, time_str)
+
+async def get_conversation_messages(conversation_id: int):
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("SELECT created_at as time, sender_id as sender, content FROM messages WHERE conversation_id = $1 ORDER BY id ASC;", conversation_id)
+        return [dict(r) for r in rows]
+
+async def create_group_conversation(name: str, participant_ids: list[int]) -> int:
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            conv_id = await conn.fetchval("INSERT INTO conversations (is_group, name) VALUES (TRUE, $1) RETURNING id;", name)
+            await conn.executemany("INSERT INTO participants (conversation_id, user_id) VALUES ($1, $2);", [(conv_id, pid) for pid in participant_ids])
+            return conv_id

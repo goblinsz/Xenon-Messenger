@@ -6,3 +6,5 @@ aio-pika==9.6.2
 bcrypt==5.0.0
 httpx==0.28.1
 flet-desktop==0.85.3
+flet
+pydantic

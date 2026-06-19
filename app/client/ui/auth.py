@@ -1,76 +1,124 @@
 import flet as ft
 import httpx
+from settings_manager import load_settings, save_settings
 
-API_URL = "http://10.0.0.103:8000"
+API_URL = "http://localhost:8000"
 
 
-def build_auth_window(page, on_success):
+def build_auth_window(page: ft.Page, on_success):
+    settings = load_settings()
+    saved_accounts = settings.get("accounts", [])
+
     username = ft.TextField(label="Username", width=300)
     password = ft.TextField(label="Password", password=True, width=300)
     name_field = ft.TextField(label="Full Name (for registration)", width=300, visible=False)
     error_text = ft.Text("", color="red", size=14)
 
     is_registering = False
-
-    # Define buttons FIRST so toggle_mode can see them
     action_btn = ft.Button("Login", width=300)
     toggle_btn = ft.TextButton("Need an account? Register")
 
-    def toggle_mode(e):
-        nonlocal is_registering
+    accounts_view = ft.Column(horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=10)
+    login_view = ft.Column(
+        controls=[username, password, name_field, error_text, action_btn, toggle_btn],
+        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+        visible=not bool(saved_accounts)
+    )
 
-        # 1. Flip the state FIRST
-        is_registering = not is_registering
+    def show_login_form(e=None):
+        accounts_view.visible = False
+        login_view.visible = True
+        page.update()
 
-        # 2. Update UI based on the NEW state
-        name_field.visible = is_registering
-
-        if is_registering:
-            action_btn.text = "Register"
-            toggle_btn.text = "Already have an account? Login"
-        else:
-            action_btn.text = "Login"
-            toggle_btn.text = "Need an account? Register"
-
-        error_text.value = ""
-
-        # 3. FORCE UPDATE each widget individually
-        # This is the missing piece! page.update() is often too slow or misses nested widgets.
-        name_field.update()
-        action_btn.update()
-        toggle_btn.update()
-        error_text.update()
-
-    async def handle_auth(e):
-        if not username.value or not password.value:
-            error_text.value = "Username and password required"
-            error_text.update()
-            return
-        if is_registering and not name_field.value:
-            error_text.value = "Full name required for registration"
-            error_text.update()
-            return
-
+    async def execute_login(uname, pwd, name_val=None, is_reg=False):
         error_text.value = "Processing..."
-        error_text.update()
+        page.update()
 
-        endpoint = "/register" if is_registering else "/login"
-        payload = {"username": username.value, "password": password.value}
-        if is_registering:
-            payload["name"] = name_field.value
+        endpoint = "/register" if is_reg else "/login"
+        payload = {"username": uname, "password": pwd}
+        if is_reg:
+            payload["name"] = name_val
 
         async with httpx.AsyncClient(trust_env=False) as client:
             try:
                 resp = await client.post(f"{API_URL}{endpoint}", json=payload)
                 if resp.status_code == 200:
                     data = resp.json()
-                    on_success(str(data["id"]), data.get("username", username.value))
+                    user_id = str(data["id"])
+                    user_name = data.get("name", uname)
+                    user_username = data.get("username", uname)
+
+                    if not any(acc["username"] == uname for acc in settings["accounts"]):
+                        settings["accounts"].append({
+                            "id": user_id,
+                            "username": user_username,
+                            "name": user_name,
+                            "password": pwd
+                        })
+                        save_settings(settings)
+
+                    await on_success(user_id, user_name, user_username)
                 else:
                     error_text.value = resp.json().get("detail", "Authentication failed")
-                    error_text.update()
+                    page.update()
             except Exception as ex:
                 error_text.value = f"Server error: {ex}"
-                error_text.update()
+                page.update()
+
+    def remove_account(uname):
+        settings["accounts"] = [acc for acc in settings["accounts"] if acc["username"] != uname]
+        save_settings(settings)
+        build_account_list()
+        if not settings["accounts"]:
+            show_login_form()
+        page.update()
+
+    def build_account_list():
+        accounts_view.controls.clear()
+        accounts_view.controls.append(ft.Text("Saved Accounts", size=20, weight="bold"))
+        for acc in settings["accounts"]:
+            accounts_view.controls.append(
+                ft.Row([
+                    ft.Button(
+                        f"Log in as {acc['name']}",
+                        icon=ft.Icons.PERSON,
+                        on_click=lambda e, u=acc['username'], p=acc['password']: page.run_task(execute_login, u, p)
+                    ),
+                    ft.IconButton(ft.Icons.DELETE, icon_color="red", tooltip="Remove Account",
+                                  on_click=lambda e, u=acc['username']: remove_account(u))
+                ], alignment=ft.MainAxisAlignment.CENTER)
+            )
+        accounts_view.controls.append(ft.TextButton("Add another account", on_click=show_login_form))
+
+    if saved_accounts:
+        build_account_list()
+
+    def toggle_mode(e):
+        nonlocal is_registering
+        is_registering = not is_registering
+
+        name_field.visible = is_registering
+
+        action_btn.text = "Register" if is_registering else "Login"
+        toggle_btn.text = "Already have an account? Login" if is_registering else "Need an account? Register"
+
+        error_text.value = ""
+        action_btn.update()
+        toggle_btn.update()
+        name_field.update()
+        login_view.update()
+        page.update()
+
+    async def handle_auth(e):
+        if not username.value or not password.value:
+            error_text.value = "Username and password required"
+            page.update()
+            return
+        if is_registering and not name_field.value:
+            error_text.value = "Full name required for registration"
+            page.update()
+            return
+        await execute_login(username.value, password.value, name_field.value, is_registering)
 
     action_btn.on_click = handle_auth
     toggle_btn.on_click = toggle_mode
@@ -79,12 +127,8 @@ def build_auth_window(page, on_success):
         controls=[
             ft.Text("Xenon Messenger", size=32, weight="bold"),
             ft.Divider(),
-            username,
-            password,
-            name_field,
-            error_text,
-            action_btn,
-            toggle_btn
+            accounts_view,
+            login_view
         ],
         alignment=ft.MainAxisAlignment.CENTER,
         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
