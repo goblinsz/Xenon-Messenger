@@ -7,7 +7,8 @@ from bd.bd import (
     init_pool, close_pool, register_user, authenticate_user, get_all_users_list,
     get_user_by_username, get_user_profile_by_id, block_user, is_blocked,
     get_or_create_direct_conversation, save_message_db, get_conversation_messages,
-    create_group_conversation, set_strict_mode, is_strict_mode, update_whitelist, is_sender_allowed
+    create_group_conversation, set_strict_mode, is_strict_mode, update_whitelist, is_sender_allowed,
+    unblock_user, get_block_status
 )
 from sendk import send
 
@@ -22,26 +23,50 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
-class UserCreate(BaseModel): username: str; name: str; password: str
+class UserCreate(BaseModel):
+    username: str
+    name: str
+    password: str
 
 
-class UserLogin(BaseModel): username: str; password: str
+class UserLogin(BaseModel):
+    username: str
+    password: str
 
 
-class MessageSend(BaseModel): sender_id: int; target_id: int; content: str
+class MessageSend(BaseModel):
+    sender_id: int
+    target_id: int
+    content: str
 
 
-class BlockRequest(BaseModel): blocker_id: int; blocked_id: int
+class BlockRequest(BaseModel):
+    blocker_id: int
+    blocked_id: int
 
 
-class GroupCreate(BaseModel): creator_id: int; name: str; participant_ids: List[int]
+class GroupCreate(BaseModel):
+    creator_id: int
+    name: str
+    participant_ids: List[int]
 
 
-class PrivacyRequest(BaseModel): user_id: int; enabled: bool
+class PrivacyRequest(BaseModel):
+    user_id: int
+    enabled: bool
 
 
-class WhitelistRequest(BaseModel): user_id: int; allowed_ids: List[int]
+class WhitelistRequest(BaseModel):
+    user_id: int
+    allowed_ids: List[int]
 
+class UnblockRequest(BaseModel):
+    blocker_id: int
+    blocked_id: int
+
+class BlockStatusRequest(BaseModel):
+    user1_id: int
+    user2_id: int
 
 @app.post("/register")
 async def register(user: UserCreate):
@@ -67,7 +92,21 @@ async def block_user_endpoint(req: BlockRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/unblock")
+async def unblock_user_endpoint(req: UnblockRequest):
+    try:
+        await unblock_user(req.blocker_id, req.blocked_id)
+        return {"status": "ok"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/block_status")
+async def get_block_status_endpoint(req: BlockStatusRequest):
+    try:
+        status = await get_block_status(req.user1_id, req.user2_id)
+        return {"status": "ok", **status}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 @app.post("/send_message")
 async def send_message_endpoint(msg: MessageSend):
     try:

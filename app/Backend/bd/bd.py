@@ -139,3 +139,25 @@ async def create_group_conversation(name: str, participant_ids: list[int]) -> in
             conv_id = await conn.fetchval("INSERT INTO conversations (is_group, name) VALUES (TRUE, $1) RETURNING id;", name)
             await conn.executemany("INSERT INTO participants (conversation_id, user_id) VALUES ($1, $2);", [(conv_id, pid) for pid in participant_ids])
             return conv_id
+
+async def unblock_user(blocker_id: int, blocked_id: int) -> None:
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "DELETE FROM blocked_users WHERE blocker_id = $1 AND blocked_id = $2;",
+            blocker_id, blocked_id
+        )
+
+async def get_block_status(user1_id: int, user2_id: int) -> dict:
+    async with pool.acquire() as conn:
+        i_blocked = await conn.fetchval(
+            "SELECT 1 FROM blocked_users WHERE blocker_id = $1 AND blocked_id = $2;",
+            user1_id, user2_id
+        )
+        they_blocked = await conn.fetchval(
+            "SELECT 1 FROM blocked_users WHERE blocker_id = $1 AND blocked_id = $2;",
+            user2_id, user1_id
+        )
+        return {
+            "i_blocked_them": i_blocked is not None,
+            "they_blocked_me": they_blocked is not None
+        }

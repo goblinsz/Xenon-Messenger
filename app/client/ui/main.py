@@ -29,7 +29,11 @@ class MainWindow:
         self.stop_event = asyncio.Event()
 
         self.status_text = ft.Text(f"Logged in as: {my_name} (ID: {my_id})", size=16, color="gray", weight="bold")
-        self.block_btn = ft.IconButton(ft.Icons.BLOCK, tooltip="Block User", visible=False, icon_color="red")
+        self.block_btn = ft.IconButton(
+            ft.Icons.BLOCK, tooltip="Block User", visible=False, icon_color="red",
+            on_click=self.handle_block_toggle
+        )
+        self.block_warning = ft.Text("", size=14, weight="bold", visible=False)
 
         self.message_history = ft.ListView(expand=True, spacing=10, padding=20, auto_scroll=True, controls=[])
         self.friends_list = ft.ListView(expand=1, spacing=10, padding=20, controls=[])
@@ -50,7 +54,6 @@ class MainWindow:
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
                     spacing=10
                 ),
-
                 ft.Row([
                     ft.IconButton(ft.Icons.PERSON_ADD, tooltip="Add Contact",
                                   on_click=lambda _: self.show_add_contact()),
@@ -70,6 +73,7 @@ class MainWindow:
             expand=True,
             controls=[
                 ft.Row([self.status_text, self.block_btn], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                self.block_warning,
                 ft.Divider(),
                 self.message_history,
                 ft.Row([self.msg_input, self.send_btn], spacing=10)
@@ -86,7 +90,6 @@ class MainWindow:
 
     @property
     def contacts_file(self):
-        """Возвращает путь к файлу контактов для ТЕКУЩЕГО аккаунта"""
         return f"contacts_{self.my_id}.json"
 
     def apply_theme(self):
@@ -271,29 +274,83 @@ class MainWindow:
                 self.add_error_text.value = f"Server error: {ex}"
                 self.page.update()
 
-    async def block_current_user(self):
+    async def handle_block_toggle(self, e):
         if not self.current_friend_id: return
+        is_blocking = not getattr(self, 'i_blocked_them', False)
+        endpoint = "/block" if is_blocking else "/unblock"
+
         async with httpx.AsyncClient(trust_env=False) as client:
             try:
-                resp = await client.post(f"{API_URL}/block", json={
+                resp = await client.post(f"{API_URL}{endpoint}", json={
                     "blocker_id": int(self.my_id),
                     "blocked_id": int(self.current_friend_id)
                 })
                 if resp.status_code == 200:
-                    self._show_error_snack("User blocked successfully.", bgcolor="green")
+                    self.i_blocked_them = is_blocking
+                    self.update_block_ui()
+                    action = "blocked" if is_blocking else "unblocked"
+                    color = "orange" if is_blocking else "green"
+                    self._show_error_snack(f"User {action} successfully.", bgcolor=color)
             except Exception as e:
-                print(f"Block error: {e}")
+                print(f"Block toggle error: {e}")
+
+    async def check_block_status(self):
+        if not self.current_friend_id: return
+        async with httpx.AsyncClient(trust_env=False) as client:
+            try:
+                resp = await client.post(f"{API_URL}/block_status", json={
+                    "user1_id": int(self.my_id),
+                    "user2_id": int(self.current_friend_id)
+                })
+                if resp.status_code == 200:
+                    data = resp.json()
+                    self.i_blocked_them = data.get("i_blocked_them", False)
+                    self.they_blocked_me = data.get("they_blocked_me", False)
+                    self.update_block_ui()
+            except Exception as e:
+                print(f"Block status error: {e}")
+
+    def update_block_ui(self):
+        if getattr(self, 'they_blocked_me', False):
+            self.block_warning.value = "⚠️ This user has blocked you. You cannot send messages."
+            self.block_warning.color = "red"
+            self.block_warning.visible = True
+            self.msg_input.disabled = True
+            self.send_btn.disabled = True
+        elif getattr(self, 'i_blocked_them', False):
+            self.block_warning.value = "⚠️ You have blocked this user."
+            self.block_warning.color = "orange"
+            self.block_warning.visible = True
+            self.msg_input.disabled = True
+            self.send_btn.disabled = True
+        else:
+            self.block_warning.visible = False
+            self.msg_input.disabled = False
+            self.send_btn.disabled = False
+
+        if getattr(self, 'i_blocked_them', False):
+            self.block_btn.icon = ft.Icons.CHECK_CIRCLE_OUTLINE
+            self.block_btn.tooltip = "Unblock User"
+            self.block_btn.icon_color = "green"
+        else:
+            self.block_btn.icon = ft.Icons.BLOCK
+            self.block_btn.tooltip = "Block User"
+            self.block_btn.icon_color = "red"
+
+        self.page.update()
 
     def select_friend(self, friend_id: str, friend_name: str):
         self.current_friend_id = friend_id
         self.status_text.value = f"Talking to: {friend_name} (ID: {friend_id})"
-
         self.block_btn.visible = True
-        self.block_btn.on_click = lambda e: asyncio.create_task(self.block_current_user())
+        self.block_warning.visible = False
+        self.msg_input.disabled = False
+        self.send_btn.disabled = False
 
         self.message_history.controls.clear()
         self.page.update()
         asyncio.create_task(self.load_chat_history(friend_id))
+        asyncio.create_task(self.check_block_status())
 
     async def load_contacts(self):
         self.friends_list.controls.clear()
@@ -315,6 +372,12 @@ class MainWindow:
             alignment=ft.Alignment.CENTER_RIGHT if is_mine else ft.Alignment.CENTER_LEFT
         )
 
+    def get_sender_name(self, sender_id: str) -> str:
+        for contact in self.my_contacts:
+            if str(contact["id"]) == str(sender_id):
+                return contact["name"]
+        return f"User {sender_id}"
+
     async def load_chat_history(self, friend_id: str):
         history = await read_chat(int(self.my_id), int(self.my_id), int(friend_id))
         self.message_history.controls.clear()
@@ -327,16 +390,18 @@ class MainWindow:
                         messages = resp.json().get("messages", [])
                         for msg in messages:
                             is_mine = str(msg["sender"]) == str(self.my_id)
+                            sender_name = "You" if is_mine else self.get_sender_name(str(msg["sender"]))
                             self.message_history.controls.append(
-                                self.build_chat_bubble(f"{'You' if is_mine else 'Friend'}: {msg['content']}", is_mine))
+                                self.build_chat_bubble(f"{sender_name}: {msg['content']}", is_mine))
                         self.page.update()
                 except Exception as ex:
                     print(f"Load history error: {ex}")
         else:
             for h in history:
                 is_mine = str(h["sender"]) == str(self.my_id)
+                sender_name = "You" if is_mine else self.get_sender_name(str(h["sender"]))
                 self.message_history.controls.append(
-                    self.build_chat_bubble(f"{'You' if is_mine else 'Friend'}: {h['content']}", is_mine))
+                    self.build_chat_bubble(f"{sender_name}: {h['content']}", is_mine))
             self.page.update()
 
     def trigger_notification(self, sender_id, content):
@@ -350,6 +415,8 @@ class MainWindow:
             if hasattr(self.page, 'open'):
                 self.page.open(snack)
             else:
+                if self.page.overlay is None:
+                    self.page.overlay = []
                 self.page.overlay.append(snack)
                 self.page.update()
         except AttributeError:
@@ -401,8 +468,9 @@ class MainWindow:
                             await self.verify_and_add_contact(sender)
 
                             if sender == self.current_friend_id:
+                                sender_name = self.get_sender_name(sender)
                                 self.message_history.controls.append(
-                                    self.build_chat_bubble(f"Friend: {content}", False))
+                                    self.build_chat_bubble(f"{sender_name}: {content}", False))
                                 self.page.update()
                             else:
                                 sender_name = next((c["name"] for c in self.my_contacts if c["id"] == sender),
@@ -447,11 +515,11 @@ class MainWindow:
                             True
                         )
                     else:
-                        error_detail = resp.json().get("detail", "Неизвестная ошибка сервера")
-                        self._show_error_snack(f"Ошибка отправки: {error_detail}")
+                        error_detail = resp.json().get("detail", "Unknown server error")
+                        self._show_error_snack(f"Send error: {error_detail}")
 
                 except Exception as ex:
-                    self._show_error_snack(f"Ошибка сети: {ex}")
+                    self._show_error_snack(f"Network error: {ex}")
 
         asyncio.create_task(do_send())
 
@@ -465,6 +533,8 @@ class MainWindow:
         if hasattr(self.page, 'open'):
             self.page.open(snack)
         else:
+            if self.page.overlay is None:
+                self.page.overlay = []
             self.page.overlay.append(snack)
             self.page.update()
 
