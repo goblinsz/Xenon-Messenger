@@ -8,3 +8,4 @@ httpx==0.28.1
 flet-desktop==0.85.3
 flet
 pydantic
+windows-toasts

@@ -11,7 +11,7 @@ from chat_history import read_chat, save_message, read_group_chat, save_group_me
 from settings_manager import load_settings, save_settings
 from windows_toasts import WindowsToaster, Toast
 
-API_URL = "http://localhost:8000"
+API_URL = "http://10.0.0.103:8000"
 RABBIT_URL = "amqp://g:g@10.0.0.103/"
 
 
@@ -398,11 +398,15 @@ class MainWindow:
     async def load_contacts(self):
         self.friends_list.controls.clear()
         for user in self.my_contacts:
-            self.friends_list.controls.append(ft.ListTile(
-                title=ft.Text(user["name"], size=self.current_size, font_family=self.current_font),
-                subtitle=ft.Text(f"@{user['username']}"), leading=ft.Icon(ft.Icons.PERSON),
-                on_click=lambda e, uid=user["id"], uname=user["name"]: self.select_friend(uid, uname)
-            ))
+            self.friends_list.controls.append(
+                ft.ListTile(
+                    title=ft.Text(user["name"], size=self.current_size, font_family=self.current_font),
+                    subtitle=ft.Text(f"@{user['username']}"), leading=ft.Icon(ft.Icons.PERSON),
+                    on_click=lambda e, uid=user["id"], uname=user["name"]: self.select_friend(uid, uname)
+                )
+            )
+
+        self.friends_list.update()
         self.page.update()
 
     def build_chat_bubble(self, text, is_mine):
@@ -413,6 +417,12 @@ class MainWindow:
             alignment=ft.Alignment.CENTER_RIGHT if is_mine else ft.Alignment.CENTER_LEFT
         )
 
+    async def _append_message_safe(self, sender_id: str, content: str, is_mine: bool):
+        sender_name = "You" if is_mine else self.get_sender_name(sender_id)
+        bubble = self.build_chat_bubble(f"{sender_name}: {content}", is_mine)
+        self.message_history.controls.append(bubble)
+        self.message_history.update()
+
     def get_sender_name(self, sender_id: str) -> str:
         if str(sender_id) == str(self.my_id): return "You"
         for contact in self.my_contacts:
@@ -420,26 +430,30 @@ class MainWindow:
         return f"User {sender_id}"
 
     async def load_chat_history(self, friend_id: str):
-        history = await read_chat(int(self.my_id), int(self.my_id), int(friend_id))
         self.message_history.controls.clear()
-        if not history:
+        self.page.update()
+
+        messages_data = []
+        history = await read_chat(int(self.my_id), int(self.my_id), int(friend_id))
+        if history:
+            messages_data = history
+        else:
             async with httpx.AsyncClient(trust_env=False) as client:
                 try:
                     resp = await client.get(f"{API_URL}/messages/{self.my_id}/{friend_id}")
                     if resp.status_code == 200:
-                        for msg in resp.json().get("messages", []):
-                            is_mine = str(msg["sender"]) == str(self.my_id)
-                            self.message_history.controls.append(
-                                self.build_chat_bubble(f"{self.get_sender_name(str(msg['sender']))}: {msg['content']}",
-                                                       is_mine))
+                        messages_data = resp.json().get("messages", [])
                 except:
                     pass
-        else:
-            for h in history:
-                is_mine = str(h["sender"]) == str(self.my_id)
-                self.message_history.controls.append(
-                    self.build_chat_bubble(f"{self.get_sender_name(str(h['sender']))}: {h['content']}", is_mine))
-        self.page.update()
+
+        bubbles = []
+        for msg in messages_data:
+            is_mine = str(msg["sender"]) == str(self.my_id)
+            sender_name = "You" if is_mine else self.get_sender_name(str(msg["sender"]))
+            bubbles.append(self.build_chat_bubble(f"{sender_name}: {msg['content']}", is_mine))
+
+        self.message_history.controls = bubbles
+        self.message_history.update()
 
     async def load_group_history(self, conv_id: str):
         history = await read_group_chat(int(self.my_id), int(conv_id))
@@ -510,39 +524,45 @@ class MainWindow:
                         data = json.loads(message.body.decode('utf-8'))
                         content = data.get('content')
                         sender = str(data.get('from'))
-                        is_group = data.get('is_group', False)
-                        conv_id = data.get('conversation_id')
+                        timestamp = data.get('timestamp')
 
                         if content:
-                            if is_group and conv_id:
-                                await save_group_message(int(self.my_id), int(conv_id), data.get('timestamp'),
-                                                         int(sender), content)
-                                if str(conv_id) == str(self.current_group_id):
-                                    self.message_history.controls.append(
-                                        self.build_chat_bubble(f"{self.get_sender_name(sender)}: {content}", False))
-                                    self.page.update()
-                                else:
-                                    self.show_desktop_notification(f"Group ({self.get_sender_name(sender)})", content)
+                            await self.verify_and_add_contact(sender)
+                            await save_message(int(self.my_id), timestamp, int(sender), int(self.my_id), content, False)
+
+                            if sender == self.current_friend_id:
+                                self.page.run_task(self._append_message_safe, sender, content, False)
                             else:
-                                await self.verify_and_add_contact(sender)
-                                await save_message(int(self.my_id), data.get('timestamp'), int(sender), int(self.my_id),
-                                                   content, False)
-                                if sender == self.current_friend_id:
-                                    self.message_history.controls.append(
-                                        self.build_chat_bubble(f"{self.get_sender_name(sender)}: {content}", False))
-                                    self.page.update()
-                                else:
-                                    self.trigger_notification(sender, content)
-                                    self.show_desktop_notification(self.get_sender_name(sender), content)
+                                sender_name = next((c["name"] for c in self.my_contacts if c["id"] == sender),
+                                                   f"User {sender}")
+                                self.trigger_notification(sender, content)
+                                self.show_desktop_notification(sender_name, content)
 
                 await queue.consume(on_message)
                 await self.stop_event.wait()
         except Exception as e:
             print(f"Listener error: {e}")
 
+    async def _handle_incoming_message(self, sender: str, content: str, timestamp: str):
+        await self.verify_and_add_contact(sender)
+
+        if sender == self.current_friend_id:
+            sender_name = self.get_sender_name(sender)
+            self.message_history.controls.append(
+                self.build_chat_bubble(f"{sender_name}: {content}", False)
+            )
+            self.message_history.update()
+            self.page.update()
+        else:
+            sender_name = next((c["name"] for c in self.my_contacts if c["id"] == sender), f"User {sender}")
+            self.trigger_notification(sender, content)
+            self.show_desktop_notification(sender_name, content)
+
+        await save_message(int(self.my_id), timestamp, int(sender), int(self.my_id), content, False)
+
     async def send_message(self, e):
-        if not self.msg_input.value: return
-        if not self.current_friend_id and not self.current_group_id: return
+        if not self.current_friend_id or not self.msg_input.value:
+            return
 
         text = self.msg_input.value
         self.msg_input.value = ""
@@ -551,33 +571,20 @@ class MainWindow:
         async def do_send():
             async with httpx.AsyncClient(trust_env=False) as client:
                 try:
-                    if self.current_group_id:
-                        resp = await client.post(f"{API_URL}/send_group_message", json={"sender_id": int(self.my_id),
-                                                                                        "conversation_id": int(
-                                                                                            self.current_group_id),
-                                                                                        "content": text})
-                        if resp.status_code == 200:
-                            self.message_history.controls.append(self.build_chat_bubble(f"You: {text}", True))
-                            self.page.update()
-                            await save_group_message(int(self.my_id), int(self.current_group_id),
-                                                     datetime.now().strftime("%Y-%m-%d %H:%M:%S"), int(self.my_id),
-                                                     text)
-                        else:
-                            self._show_error_snack(resp.json().get("detail", "Error"))
+                    resp = await client.post(f"{API_URL}/send_message", json={
+                        "sender_id": int(self.my_id),
+                        "target_id": int(self.current_friend_id),
+                        "content": text
+                    })
+
+                    if resp.status_code == 200:
+                        self.page.run_task(self._append_message_safe, self.my_id, text, True)
+                        await save_message(int(self.my_id), datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                           int(self.my_id), int(self.current_friend_id), text, True)
                     else:
-                        resp = await client.post(f"{API_URL}/send_message", json={"sender_id": int(self.my_id),
-                                                                                  "target_id": int(
-                                                                                      self.current_friend_id),
-                                                                                  "content": text})
-                        if resp.status_code == 200:
-                            self.message_history.controls.append(self.build_chat_bubble(f"You: {text}", True))
-                            self.page.update()
-                            await save_message(int(self.my_id), datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                                               int(self.my_id), int(self.current_friend_id), text, True)
-                        else:
-                            self._show_error_snack(resp.json().get("detail", "Error"))
+                        self._show_error_snack(resp.json().get("detail", "Ошибка отправки"))
                 except Exception as ex:
-                    self._show_error_snack(f"Network error: {ex}")
+                    self._show_error_snack(f"Ошибка сети: {ex}")
 
         asyncio.create_task(do_send())
 
