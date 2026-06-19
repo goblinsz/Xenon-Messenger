@@ -42,3 +42,29 @@ async def read_chat(owner_id: int, sender: int, target: int):
     except (json.JSONDecodeError, IOError) as e:
         print(f"Ошибка в чтении истории чата: {e}")
         return []
+
+def get_group_filename(owner_id: int, conv_id: int) -> str:
+    user_dir = os.path.join(HISTORY_DIR, str(owner_id))
+    os.makedirs(user_dir, exist_ok=True)
+    return os.path.join(user_dir, f"group_{conv_id}.json")
+
+async def save_group_message(owner_id: int, conv_id: int, time: str, sender: int, content: str):
+    filename = get_group_filename(owner_id, conv_id)
+    message_obj = {"time": time, "sender": sender, "content": content}
+    history = []
+    if os.path.exists(filename):
+        try:
+            with open(filename, 'r', encoding='utf-8') as f: history = json.load(f)
+        except: history = []
+    history.append(message_obj)
+    with open(filename, 'w', encoding='utf-8') as f:
+        json.dump(history, f, ensure_ascii=False, indent=2)
+
+async def read_group_chat(owner_id: int, conv_id: int):
+    filename = get_group_filename(owner_id, conv_id)
+    if not os.path.exists(filename): return []
+    try:
+        with open(filename, 'r', encoding='utf-8') as f: history = json.load(f)
+        history.sort(key=lambda msg: msg.get('time', ''))
+        return history
+    except: return []

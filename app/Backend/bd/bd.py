@@ -161,3 +161,18 @@ async def get_block_status(user1_id: int, user2_id: int) -> dict:
             "i_blocked_them": i_blocked is not None,
             "they_blocked_me": they_blocked is not None
         }
+
+async def get_user_conversations(user_id: int):
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT c.id, c.name, c.is_group 
+            FROM conversations c
+            JOIN participants p ON c.id = p.conversation_id
+            WHERE p.user_id = $1 AND c.is_group = TRUE;
+        """, user_id)
+        return [dict(r) for r in rows]
+
+async def get_conversation_participants(conversation_id: int):
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("SELECT user_id FROM participants WHERE conversation_id = $1;", conversation_id)
+        return [r['user_id'] for r in rows]

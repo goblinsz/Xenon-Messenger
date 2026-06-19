@@ -10,7 +10,7 @@ async def main(page: ft.Page):
     async def show_main(my_id: str, my_name: str, my_username: str):
         page.controls.clear()
         main_window = MainWindow(page, my_id, my_name, my_username, on_logout=show_auth)
-        page.add(main_window.view, main_window.settings_overlay, main_window.add_contact_overlay)
+        page.add(main_window.view, main_window.settings_overlay, main_window.add_contact_overlay, main_window.create_group_overlay)
         await main_window.initialize()
         page.update()
 

@@ -8,7 +8,8 @@ from bd.bd import (
     get_user_by_username, get_user_profile_by_id, block_user, is_blocked,
     get_or_create_direct_conversation, save_message_db, get_conversation_messages,
     create_group_conversation, set_strict_mode, is_strict_mode, update_whitelist, is_sender_allowed,
-    unblock_user, get_block_status
+    unblock_user, get_block_status,
+    get_user_conversations, get_conversation_participants
 )
 from sendk import send
 
@@ -67,6 +68,11 @@ class UnblockRequest(BaseModel):
 class BlockStatusRequest(BaseModel):
     user1_id: int
     user2_id: int
+
+class GroupMessageSend(BaseModel):
+    sender_id: int
+    conversation_id: int
+    content: str
 
 @app.post("/register")
 async def register(user: UserCreate):
@@ -189,5 +195,50 @@ async def update_whitelist_endpoint(req: WhitelistRequest):
     try:
         await update_whitelist(req.user_id, req.allowed_ids)
         return {"status": "ok"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/conversations/{user_id}")
+async def get_conversations(user_id: int):
+    try:
+        convs = await get_user_conversations(user_id)
+        return {"status": "ok", "conversations": convs}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/messages/group/{conv_id}")
+async def get_group_messages(conv_id: int):
+    try:
+        history = await get_conversation_messages(conv_id)
+        return {"status": "ok", "messages": history}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/send_group_message")
+async def send_group_message_endpoint(msg: GroupMessageSend):
+    try:
+        participants = await get_conversation_participants(msg.conversation_id)
+        if msg.sender_id not in participants:
+            raise HTTPException(status_code=403, detail="You are not a member of this group.")
+
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        await save_message_db(msg.conversation_id, msg.sender_id, msg.content, timestamp)
+
+        for pid in participants:
+            if pid != msg.sender_id:
+                await send(
+                    target_id=str(pid),
+                    content=msg.content,
+                    sender=str(msg.sender_id),
+                    timestamp=timestamp,
+                    conversation_id=msg.conversation_id,
+                    is_group=True
+                )
+        return {"status": "ok"}
+    except HTTPException as he:
+        raise he
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

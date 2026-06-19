@@ -5,7 +5,9 @@ import aio_pika
 import json
 import asyncio
 import os
-from chat_history import read_chat, save_message
+
+
+from chat_history import read_chat, save_message, read_group_chat, save_group_message
 from settings_manager import load_settings, save_settings
 from windows_toasts import WindowsToaster, Toast
 
@@ -21,22 +23,21 @@ class MainWindow:
         self.my_username = my_username
         self.on_logout = on_logout
         self.current_friend_id = None
+        self.current_group_id = None
         self.my_contacts = self.load_contacts_json()
 
         self.settings = load_settings()
         self.theme = self.settings.get("theme", {})
-
         self.stop_event = asyncio.Event()
 
         self.status_text = ft.Text(f"Logged in as: {my_name} (ID: {my_id})", size=16, color="gray", weight="bold")
-        self.block_btn = ft.IconButton(
-            ft.Icons.BLOCK, tooltip="Block User", visible=False, icon_color="red",
-            on_click=self.handle_block_toggle
-        )
+        self.block_btn = ft.IconButton(ft.Icons.BLOCK, tooltip="Block User", visible=False, icon_color="red",
+                                       on_click=self.handle_block_toggle)
         self.block_warning = ft.Text("", size=14, weight="bold", visible=False)
 
         self.message_history = ft.ListView(expand=True, spacing=10, padding=20, auto_scroll=True, controls=[])
         self.friends_list = ft.ListView(expand=1, spacing=10, padding=20, controls=[])
+        self.groups_list = ft.ListView(expand=1, spacing=10, padding=20, controls=[])
 
         self.msg_input = ft.TextField(hint_text="Type message...", expand=True)
         self.send_btn = ft.Button("Send", icon=ft.Icons.SEND, on_click=self.send_message)
@@ -51,10 +52,11 @@ class MainWindow:
                         ft.Text(f"@{self.my_username}", size=14, color="blue", weight="bold"),
                         ft.Text(f"(ID: {self.my_id})", size=12, color="gray", italic=True)
                     ],
-                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                    spacing=10
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER, spacing=10
                 ),
                 ft.Row([
+                    ft.IconButton(ft.Icons.GROUP_ADD, tooltip="Create Group",
+                                  on_click=lambda _: self.show_create_group()),
                     ft.IconButton(ft.Icons.PERSON_ADD, tooltip="Add Contact",
                                   on_click=lambda _: self.show_add_contact()),
                     ft.IconButton(ft.Icons.SETTINGS, tooltip="Settings", on_click=lambda _: self.show_settings()),
@@ -65,7 +67,13 @@ class MainWindow:
         )
 
         self.left_column = ft.Column(
-            controls=[ft.Text("My contacts", size=20, weight="bold"), ft.Divider(), self.friends_list],
+            controls=[
+                ft.Text("Groups", size=18, weight="bold"),
+                self.groups_list,
+                ft.Divider(),
+                ft.Text("Contacts", size=18, weight="bold"),
+                self.friends_list
+            ],
             width=300
         )
 
@@ -95,9 +103,7 @@ class MainWindow:
     def apply_theme(self):
         self.page.bgcolor = self.theme.get("bg_color") if self.theme.get("bg_color") else None
         self.current_font = self.theme.get("font_family", "Default")
-        if self.current_font == "Default":
-            self.current_font = None
-
+        if self.current_font == "Default": self.current_font = None
         self.current_size = int(self.theme.get("font_size", 16))
         self.my_bubble_color = self.theme.get("bubble_color", "#DCF8C6")
         self.page.update()
@@ -108,6 +114,7 @@ class MainWindow:
 
     async def initialize(self):
         await self.load_contacts()
+        await self.load_groups()
         if self.settings.get("strict_mode", False):
             await self.sync_whitelist_to_server()
         asyncio.create_task(self.listen_to_my_queue())
@@ -135,51 +142,33 @@ class MainWindow:
             self.theme[key] = e.control.value
             self.update_settings_file()
             self.apply_theme()
-            if self.current_friend_id:
-                asyncio.create_task(self.load_chat_history(self.current_friend_id))
+            if self.current_friend_id: asyncio.create_task(self.load_chat_history(self.current_friend_id))
 
         def toggle_dark_mode(e):
             self.page.theme_mode = ft.ThemeMode.DARK if self.page.theme_mode == ft.ThemeMode.LIGHT else ft.ThemeMode.LIGHT
             self.page.update()
 
-        privacy_switch = ft.Switch(
-            label="Only allow messages from contacts",
-            value=self.settings.get("strict_mode", False),
-            on_change=self.toggle_strict_mode
-        )
-
-        font_dropdown = ft.Dropdown(
-            label="Font Family", value=self.theme.get("font_family"),
-            options=[ft.DropdownOption(key="Default"), ft.DropdownOption(key="Courier New"),
-                     ft.DropdownOption(key="Consolas")],
-            on_select=lambda e: change_color(e, "font_family"), width=260
-        )
-
-        size_dropdown = ft.Dropdown(
-            label="Font Size", value=str(self.theme.get("font_size")),
-            options=[ft.DropdownOption(key=str(size), text=str(size)) for size in [12, 14, 16, 18, 20, 24]],
-            on_select=lambda e: change_color(e, "font_size"), width=260
-        )
-
-        bg_color_dropdown = ft.Dropdown(
-            label="Background Color", value=self.theme.get("bg_color"),
-            options=[
-                ft.DropdownOption(key="", text="Default"),
-                ft.DropdownOption(key="#F0F8FF", text="Alice Blue"),
-                ft.DropdownOption(key="#F5F5F5", text="Light Gray"),
-            ],
-            on_select=lambda e: change_color(e, "bg_color"), width=260
-        )
-
-        bubble_color_dropdown = ft.Dropdown(
-            label="My Bubble Color", value=self.theme.get("bubble_color"),
-            options=[
-                ft.DropdownOption(key="#DCF8C6", text="Classic Green"),
-                ft.DropdownOption(key="#BBDEFB", text="Ocean Blue"),
-                ft.DropdownOption(key="#FFECB3", text="Warm Yellow"),
-            ],
-            on_select=lambda e: change_color(e, "bubble_color"), width=260
-        )
+        privacy_switch = ft.Switch(label="Private mode",
+                                   value=self.settings.get("strict_mode", False),
+                                   on_change=self.toggle_strict_mode)
+        font_dropdown = ft.Dropdown(label="Font Family", value=self.theme.get("font_family"),
+                                    options=[ft.DropdownOption(key="Default"), ft.DropdownOption(key="Courier New"),
+                                             ft.DropdownOption(key="Consolas")],
+                                    on_select=lambda e: change_color(e, "font_family"), width=260)
+        size_dropdown = ft.Dropdown(label="Font Size", value=str(self.theme.get("font_size")),
+                                    options=[ft.DropdownOption(key=str(s), text=str(s)) for s in
+                                             [12, 14, 16, 18, 20, 24]],
+                                    on_select=lambda e: change_color(e, "font_size"), width=260)
+        bg_color_dropdown = ft.Dropdown(label="Background Color", value=self.theme.get("bg_color"),
+                                        options=[ft.DropdownOption(key="", text="Default"),
+                                                 ft.DropdownOption(key="#F0F8FF", text="Alice Blue"),
+                                                 ft.DropdownOption(key="#F5F5F5", text="Light Gray")],
+                                        on_select=lambda e: change_color(e, "bg_color"), width=260)
+        bubble_color_dropdown = ft.Dropdown(label="My Bubble Color", value=self.theme.get("bubble_color"),
+                                            options=[ft.DropdownOption(key="#DCF8C6", text="Classic Green"),
+                                                     ft.DropdownOption(key="#BBDEFB", text="Ocean Blue"),
+                                                     ft.DropdownOption(key="#FFECB3", text="Warm Yellow")],
+                                            on_select=lambda e: change_color(e, "bubble_color"), width=260)
 
         self.settings_overlay = ft.Container(
             visible=False,
@@ -190,11 +179,9 @@ class MainWindow:
                         privacy_switch,
                         ft.Switch(label="Dark Mode", value=(self.page.theme_mode == ft.ThemeMode.DARK),
                                   on_change=toggle_dark_mode),
-                        font_dropdown, size_dropdown, bg_color_dropdown, bubble_color_dropdown,
-                        ft.Row([ft.TextButton("Close", on_click=lambda _: self.hide_overlays())],
-                               alignment=ft.MainAxisAlignment.END)
+                        font_dropdown, size_dropdown, bg_color_dropdown, bubble_color_dropdown
                     ], tight=True, spacing=15, scroll=ft.ScrollMode.AUTO),
-                    padding=20, width=320, height=450
+                    padding=20, width=320, height=400
                 )
             ),
             alignment=ft.Alignment.CENTER, bgcolor="#80000000", expand=True
@@ -202,38 +189,81 @@ class MainWindow:
 
         self.add_username_input = ft.TextField(hint_text="Enter exact username", autofocus=True)
         self.add_error_text = ft.Text("", color="red", size=12)
+        self.add_contact_overlay = ft.Container(visible=False, content=ft.Card(content=ft.Container(content=ft.Column(
+            [ft.Text("Add Contact", size=20, weight="bold"), self.add_username_input, self.add_error_text, ft.Row(
+                [ft.TextButton("Cancel", on_click=lambda _: self.hide_overlays()),
+                 ft.TextButton("Search & Add", on_click=self.add_new_contact)], alignment=ft.MainAxisAlignment.END)],
+            tight=True, spacing=10), padding=20, width=300)), alignment=ft.Alignment.CENTER, bgcolor="#80000000",
+                                                expand=True)
 
-        self.add_contact_overlay = ft.Container(
-            visible=False,
-            content=ft.Card(
-                content=ft.Container(
-                    content=ft.Column([
-                        ft.Text("Add Contact", size=20, weight="bold"),
-                        self.add_username_input, self.add_error_text,
-                        ft.Row([ft.TextButton("Cancel", on_click=lambda _: self.hide_overlays()),
-                                ft.TextButton("Search & Add", on_click=self.add_new_contact)],
-                               alignment=ft.MainAxisAlignment.END)
-                    ], tight=True, spacing=10),
-                    padding=20, width=300
-                )
-            ),
-            alignment=ft.Alignment.CENTER, bgcolor="#80000000", expand=True
-        )
+        self.group_name_input = ft.TextField(hint_text="Group name", autofocus=True)
+        self.group_participants_list = ft.ListView(height=200, spacing=5)
+        self.group_error_text = ft.Text("", color="red", size=12)
+        self.create_group_overlay = ft.Container(visible=False, content=ft.Card(content=ft.Container(content=ft.Column(
+            [ft.Text("Create Group", size=20, weight="bold"), self.group_name_input,
+             ft.Text("Select participants:", size=14, weight="bold"), self.group_participants_list,
+             self.group_error_text, ft.Row([ft.TextButton("Cancel", on_click=lambda _: self.hide_overlays()),
+                                            ft.TextButton("Create", on_click=self.create_group)],
+                                           alignment=ft.MainAxisAlignment.END)], tight=True, spacing=10), padding=20,
+                                                                                                     width=350)),
+                                                 alignment=ft.Alignment.CENTER, bgcolor="#80000000", expand=True)
 
     def show_settings(self):
+        self.hide_overlays()
         self.settings_overlay.visible = True
         self.page.update()
 
     def show_add_contact(self):
+        self.hide_overlays()
         self.add_username_input.value = ""
         self.add_error_text.value = ""
         self.add_contact_overlay.visible = True
         self.page.update()
 
+    def show_create_group(self):
+        self.hide_overlays()
+        self.group_name_input.value = ""
+        self.group_error_text.value = ""
+        self.group_participants_list.controls.clear()
+        for c in self.my_contacts:
+            self.group_participants_list.controls.append(
+                ft.Checkbox(label=f"{c['name']} (@{c['username']})", value=False, data=str(c['id']))
+            )
+        self.create_group_overlay.visible = True
+        self.page.update()
+
     def hide_overlays(self):
         self.settings_overlay.visible = False
         self.add_contact_overlay.visible = False
+        self.create_group_overlay.visible = False
         self.page.update()
+
+    async def create_group(self, e):
+        name = self.group_name_input.value.strip()
+        if not name:
+            self.group_error_text.value = "Name is required"
+            self.page.update()
+            return
+        selected = [int(cb.data) for cb in self.group_participants_list.controls if cb.value]
+        if len(selected) < 1:
+            self.group_error_text.value = "Select at least 1 participant"
+            self.page.update()
+            return
+
+        async with httpx.AsyncClient(trust_env=False) as client:
+            try:
+                resp = await client.post(f"{API_URL}/groups/create", json={"creator_id": int(self.my_id), "name": name,
+                                                                           "participant_ids": selected})
+                if resp.status_code == 200:
+                    self.hide_overlays()
+                    await self.load_groups()
+                    self._show_error_snack("Group created!", bgcolor="green")
+                else:
+                    self.group_error_text.value = resp.json().get("detail", "Error")
+                    self.page.update()
+            except Exception as ex:
+                self.group_error_text.value = str(ex)
+                self.page.update()
 
     async def add_new_contact(self, e):
         username = self.add_username_input.value.strip()
@@ -243,33 +273,26 @@ class MainWindow:
             return
         self.add_error_text.value = "Searching..."
         self.page.update()
-
         async with httpx.AsyncClient(trust_env=False) as client:
             try:
                 resp = await client.get(f"{API_URL}/users", params={"username": username})
                 if resp.status_code == 200:
-                    data = resp.json()
-                    user = data.get("user", {})
+                    user = resp.json().get("user", {})
                     user_id = str(user.get("id"))
                     if user_id == self.my_id:
                         self.add_error_text.value = "You cannot add yourself!"
-                        self.page.update()
-                        return
-                    if any(c["id"] == user_id for c in self.my_contacts):
+                    elif any(c["id"] == user_id for c in self.my_contacts):
                         self.add_error_text.value = "Already in your contacts!"
-                        self.page.update()
-                        return
-
-                    self.my_contacts.append({"id": user_id, "username": user.get("username"), "name": user.get("name")})
-                    self.save_contacts_json()
-                    self.hide_overlays()
-                    await self.load_contacts()
-
-                    if self.settings.get("strict_mode", False):
-                        await self.sync_whitelist_to_server()
+                    else:
+                        self.my_contacts.append(
+                            {"id": user_id, "username": user.get("username"), "name": user.get("name")})
+                        self.save_contacts_json()
+                        self.hide_overlays()
+                        await self.load_contacts()
+                        if self.settings.get("strict_mode", False): await self.sync_whitelist_to_server()
                 else:
-                    self.add_error_text.value = "User not found on server."
-                    self.page.update()
+                    self.add_error_text.value = "User not found."
+                self.page.update()
             except Exception as ex:
                 self.add_error_text.value = f"Server error: {ex}"
                 self.page.update()
@@ -278,30 +301,24 @@ class MainWindow:
         if not self.current_friend_id: return
         is_blocking = not getattr(self, 'i_blocked_them', False)
         endpoint = "/block" if is_blocking else "/unblock"
-
         async with httpx.AsyncClient(trust_env=False) as client:
             try:
-                resp = await client.post(f"{API_URL}{endpoint}", json={
-                    "blocker_id": int(self.my_id),
-                    "blocked_id": int(self.current_friend_id)
-                })
+                resp = await client.post(f"{API_URL}{endpoint}", json={"blocker_id": int(self.my_id),
+                                                                       "blocked_id": int(self.current_friend_id)})
                 if resp.status_code == 200:
                     self.i_blocked_them = is_blocking
                     self.update_block_ui()
-                    action = "blocked" if is_blocking else "unblocked"
-                    color = "orange" if is_blocking else "green"
-                    self._show_error_snack(f"User {action} successfully.", bgcolor=color)
+                    self._show_error_snack(f"User {'blocked' if is_blocking else 'unblocked'}.",
+                                           bgcolor="orange" if is_blocking else "green")
             except Exception as e:
-                print(f"Block toggle error: {e}")
+                print(f"Block error: {e}")
 
     async def check_block_status(self):
         if not self.current_friend_id: return
         async with httpx.AsyncClient(trust_env=False) as client:
             try:
-                resp = await client.post(f"{API_URL}/block_status", json={
-                    "user1_id": int(self.my_id),
-                    "user2_id": int(self.current_friend_id)
-                })
+                resp = await client.post(f"{API_URL}/block_status",
+                                         json={"user1_id": int(self.my_id), "user2_id": int(self.current_friend_id)})
                 if resp.status_code == 200:
                     data = resp.json()
                     self.i_blocked_them = data.get("i_blocked_them", False)
@@ -312,7 +329,7 @@ class MainWindow:
 
     def update_block_ui(self):
         if getattr(self, 'they_blocked_me', False):
-            self.block_warning.value = "⚠️ This user has blocked you. You cannot send messages."
+            self.block_warning.value = "⚠️ This user has blocked you."
             self.block_warning.color = "red"
             self.block_warning.visible = True
             self.msg_input.disabled = True
@@ -326,42 +343,66 @@ class MainWindow:
         else:
             self.block_warning.visible = False
             self.msg_input.disabled = False
-            self.send_btn.disabled = False
+            self.send_btn.disabled = True if self.current_group_id else False
 
         if getattr(self, 'i_blocked_them', False):
             self.block_btn.icon = ft.Icons.CHECK_CIRCLE_OUTLINE
-            self.block_btn.tooltip = "Unblock User"
+            self.block_btn.tooltip = "Unblock"
             self.block_btn.icon_color = "green"
         else:
             self.block_btn.icon = ft.Icons.BLOCK
-            self.block_btn.tooltip = "Block User"
+            self.block_btn.tooltip = "Block"
             self.block_btn.icon_color = "red"
-
         self.page.update()
 
     def select_friend(self, friend_id: str, friend_name: str):
         self.current_friend_id = friend_id
+        self.current_group_id = None
         self.status_text.value = f"Talking to: {friend_name} (ID: {friend_id})"
         self.block_btn.visible = True
         self.block_warning.visible = False
         self.msg_input.disabled = False
         self.send_btn.disabled = False
-
         self.message_history.controls.clear()
         self.page.update()
         asyncio.create_task(self.load_chat_history(friend_id))
         asyncio.create_task(self.check_block_status())
 
+    def select_group(self, conv_id: str, group_name: str):
+        self.current_friend_id = None
+        self.current_group_id = conv_id
+        self.status_text.value = f"Group: {group_name}"
+        self.block_btn.visible = False
+        self.block_warning.visible = False
+        self.msg_input.disabled = False
+        self.send_btn.disabled = False
+        self.message_history.controls.clear()
+        self.page.update()
+        asyncio.create_task(self.load_group_history(conv_id))
+
+    async def load_groups(self):
+        self.groups_list.controls.clear()
+        async with httpx.AsyncClient(trust_env=False) as client:
+            try:
+                resp = await client.get(f"{API_URL}/conversations/{self.my_id}")
+                if resp.status_code == 200:
+                    for c in resp.json().get("conversations", []):
+                        self.groups_list.controls.append(ft.ListTile(
+                            title=ft.Text(c["name"], weight="bold"), leading=ft.Icon(ft.Icons.GROUP),
+                            on_click=lambda e, cid=str(c["id"]), cname=c["name"]: self.select_group(cid, cname)
+                        ))
+            except Exception as e:
+                print(f"Load groups error: {e}")
+        self.page.update()
+
     async def load_contacts(self):
         self.friends_list.controls.clear()
         for user in self.my_contacts:
-            self.friends_list.controls.append(
-                ft.ListTile(
-                    title=ft.Text(user["name"], size=self.current_size, font_family=self.current_font),
-                    subtitle=ft.Text(f"@{user['username']}"), leading=ft.Icon(ft.Icons.PERSON),
-                    on_click=lambda e, uid=user["id"], uname=user["name"]: self.select_friend(uid, uname)
-                )
-            )
+            self.friends_list.controls.append(ft.ListTile(
+                title=ft.Text(user["name"], size=self.current_size, font_family=self.current_font),
+                subtitle=ft.Text(f"@{user['username']}"), leading=ft.Icon(ft.Icons.PERSON),
+                on_click=lambda e, uid=user["id"], uname=user["name"]: self.select_friend(uid, uname)
+            ))
         self.page.update()
 
     def build_chat_bubble(self, text, is_mine):
@@ -373,64 +414,74 @@ class MainWindow:
         )
 
     def get_sender_name(self, sender_id: str) -> str:
+        if str(sender_id) == str(self.my_id): return "You"
         for contact in self.my_contacts:
-            if str(contact["id"]) == str(sender_id):
-                return contact["name"]
+            if str(contact["id"]) == str(sender_id): return contact["name"]
         return f"User {sender_id}"
 
     async def load_chat_history(self, friend_id: str):
         history = await read_chat(int(self.my_id), int(self.my_id), int(friend_id))
         self.message_history.controls.clear()
-
         if not history:
             async with httpx.AsyncClient(trust_env=False) as client:
                 try:
                     resp = await client.get(f"{API_URL}/messages/{self.my_id}/{friend_id}")
                     if resp.status_code == 200:
-                        messages = resp.json().get("messages", [])
-                        for msg in messages:
+                        for msg in resp.json().get("messages", []):
                             is_mine = str(msg["sender"]) == str(self.my_id)
-                            sender_name = "You" if is_mine else self.get_sender_name(str(msg["sender"]))
                             self.message_history.controls.append(
-                                self.build_chat_bubble(f"{sender_name}: {msg['content']}", is_mine))
-                        self.page.update()
-                except Exception as ex:
-                    print(f"Load history error: {ex}")
+                                self.build_chat_bubble(f"{self.get_sender_name(str(msg['sender']))}: {msg['content']}",
+                                                       is_mine))
+                except:
+                    pass
         else:
             for h in history:
                 is_mine = str(h["sender"]) == str(self.my_id)
-                sender_name = "You" if is_mine else self.get_sender_name(str(h["sender"]))
                 self.message_history.controls.append(
-                    self.build_chat_bubble(f"{sender_name}: {h['content']}", is_mine))
-            self.page.update()
+                    self.build_chat_bubble(f"{self.get_sender_name(str(h['sender']))}: {h['content']}", is_mine))
+        self.page.update()
+
+    async def load_group_history(self, conv_id: str):
+        history = await read_group_chat(int(self.my_id), int(conv_id))
+        self.message_history.controls.clear()
+        if not history:
+            async with httpx.AsyncClient(trust_env=False) as client:
+                try:
+                    resp = await client.get(f"{API_URL}/messages/group/{conv_id}")
+                    if resp.status_code == 200:
+                        for msg in resp.json().get("messages", []):
+                            is_mine = str(msg["sender"]) == str(self.my_id)
+                            self.message_history.controls.append(
+                                self.build_chat_bubble(f"{self.get_sender_name(str(msg['sender']))}: {msg['content']}",
+                                                       is_mine))
+                except:
+                    pass
+        else:
+            for h in history:
+                is_mine = str(h["sender"]) == str(self.my_id)
+                self.message_history.controls.append(
+                    self.build_chat_bubble(f"{self.get_sender_name(str(h['sender']))}: {h['content']}", is_mine))
+        self.page.update()
 
     def trigger_notification(self, sender_id, content):
-        sender_name = next((c["name"] for c in self.my_contacts if c["id"] == sender_id), f"User {sender_id}")
-        try:
-            snack = ft.SnackBar(
-                content=ft.Text(f"New message from {sender_name}: {content}"),
-                action="View",
-                on_action=lambda e: self.select_friend(sender_id, sender_name)
-            )
-            if hasattr(self.page, 'open'):
-                self.page.open(snack)
-            else:
-                if self.page.overlay is None:
-                    self.page.overlay = []
-                self.page.overlay.append(snack)
-                self.page.update()
-        except AttributeError:
-            pass
+        sender_name = self.get_sender_name(sender_id)
+        snack = ft.SnackBar(content=ft.Text(f"New message from {sender_name}: {content}"), action="View",
+                            on_action=lambda e: self.select_friend(sender_id, sender_name))
+        if hasattr(self.page, 'open'):
+            self.page.open(snack)
+        else:
+            if self.page.overlay is None: self.page.overlay = []
+            self.page.overlay.append(snack)
+            self.page.update()
 
     def show_desktop_notification(self, sender_title: str, message_content: str):
         try:
             toaster = WindowsToaster("Xenon Messenger")
             toast = Toast()
-            body_text = message_content if len(message_content) < 60 else f"{message_content[:57]}..."
-            toast.text_fields = [f"New Message from {sender_title}", body_text]
+            toast.text_fields = [f"New Message from {sender_title}", message_content[:60]]
             toaster.show_toast(toast)
-        except Exception as e:
-            print(f"Failed to display desktop notification: {e}")
+        except:
+            pass
 
     async def verify_and_add_contact(self, sender_id: str):
         if not any(c["id"] == sender_id for c in self.my_contacts):
@@ -438,16 +489,12 @@ class MainWindow:
                 try:
                     resp = await client.get(f"{API_URL}/users/id/{sender_id}")
                     if resp.status_code == 200:
-                        user_info = resp.json()
-                        self.my_contacts.append({
-                            "id": str(user_info["id"]),
-                            "username": user_info["username"],
-                            "name": user_info["name"]
-                        })
+                        u = resp.json()
+                        self.my_contacts.append({"id": str(u["id"]), "username": u["username"], "name": u["name"]})
                         self.save_contacts_json()
                         await self.load_contacts()
-                except Exception as e:
-                    print(f"Error auto-populating contact: {e}")
+                except:
+                    pass
 
     async def listen_to_my_queue(self):
         try:
@@ -463,23 +510,30 @@ class MainWindow:
                         data = json.loads(message.body.decode('utf-8'))
                         content = data.get('content')
                         sender = str(data.get('from'))
+                        is_group = data.get('is_group', False)
+                        conv_id = data.get('conversation_id')
 
                         if content:
-                            await self.verify_and_add_contact(sender)
-
-                            if sender == self.current_friend_id:
-                                sender_name = self.get_sender_name(sender)
-                                self.message_history.controls.append(
-                                    self.build_chat_bubble(f"{sender_name}: {content}", False))
-                                self.page.update()
+                            if is_group and conv_id:
+                                await save_group_message(int(self.my_id), int(conv_id), data.get('timestamp'),
+                                                         int(sender), content)
+                                if str(conv_id) == str(self.current_group_id):
+                                    self.message_history.controls.append(
+                                        self.build_chat_bubble(f"{self.get_sender_name(sender)}: {content}", False))
+                                    self.page.update()
+                                else:
+                                    self.show_desktop_notification(f"Group ({self.get_sender_name(sender)})", content)
                             else:
-                                sender_name = next((c["name"] for c in self.my_contacts if c["id"] == sender),
-                                                   f"User {sender}")
-                                self.trigger_notification(sender, content)
-                                self.show_desktop_notification(sender_name, content)
-
-                            await save_message(int(self.my_id), data.get('timestamp'), int(sender), int(self.my_id),
-                                               content, False)
+                                await self.verify_and_add_contact(sender)
+                                await save_message(int(self.my_id), data.get('timestamp'), int(sender), int(self.my_id),
+                                                   content, False)
+                                if sender == self.current_friend_id:
+                                    self.message_history.controls.append(
+                                        self.build_chat_bubble(f"{self.get_sender_name(sender)}: {content}", False))
+                                    self.page.update()
+                                else:
+                                    self.trigger_notification(sender, content)
+                                    self.show_desktop_notification(self.get_sender_name(sender), content)
 
                 await queue.consume(on_message)
                 await self.stop_event.wait()
@@ -487,8 +541,8 @@ class MainWindow:
             print(f"Listener error: {e}")
 
     async def send_message(self, e):
-        if not self.current_friend_id or not self.msg_input.value:
-            return
+        if not self.msg_input.value: return
+        if not self.current_friend_id and not self.current_group_id: return
 
         text = self.msg_input.value
         self.msg_input.value = ""
@@ -497,44 +551,42 @@ class MainWindow:
         async def do_send():
             async with httpx.AsyncClient(trust_env=False) as client:
                 try:
-                    resp = await client.post(f"{API_URL}/send_message", json={
-                        "sender_id": int(self.my_id),
-                        "target_id": int(self.current_friend_id),
-                        "content": text
-                    })
-
-                    if resp.status_code == 200:
-                        self.message_history.controls.append(self.build_chat_bubble(f"You: {text}", True))
-                        self.page.update()
-                        await save_message(
-                            int(self.my_id),
-                            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                            int(self.my_id),
-                            int(self.current_friend_id),
-                            text,
-                            True
-                        )
+                    if self.current_group_id:
+                        resp = await client.post(f"{API_URL}/send_group_message", json={"sender_id": int(self.my_id),
+                                                                                        "conversation_id": int(
+                                                                                            self.current_group_id),
+                                                                                        "content": text})
+                        if resp.status_code == 200:
+                            self.message_history.controls.append(self.build_chat_bubble(f"You: {text}", True))
+                            self.page.update()
+                            await save_group_message(int(self.my_id), int(self.current_group_id),
+                                                     datetime.now().strftime("%Y-%m-%d %H:%M:%S"), int(self.my_id),
+                                                     text)
+                        else:
+                            self._show_error_snack(resp.json().get("detail", "Error"))
                     else:
-                        error_detail = resp.json().get("detail", "Unknown server error")
-                        self._show_error_snack(f"Send error: {error_detail}")
-
+                        resp = await client.post(f"{API_URL}/send_message", json={"sender_id": int(self.my_id),
+                                                                                  "target_id": int(
+                                                                                      self.current_friend_id),
+                                                                                  "content": text})
+                        if resp.status_code == 200:
+                            self.message_history.controls.append(self.build_chat_bubble(f"You: {text}", True))
+                            self.page.update()
+                            await save_message(int(self.my_id), datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                               int(self.my_id), int(self.current_friend_id), text, True)
+                        else:
+                            self._show_error_snack(resp.json().get("detail", "Error"))
                 except Exception as ex:
                     self._show_error_snack(f"Network error: {ex}")
 
         asyncio.create_task(do_send())
 
     def _show_error_snack(self, message: str, bgcolor: str = "red"):
-        snack = ft.SnackBar(
-            content=ft.Text(message, color="white"),
-            bgcolor=bgcolor,
-            duration=4000
-        )
-
+        snack = ft.SnackBar(content=ft.Text(message, color="white"), bgcolor=bgcolor, duration=4000)
         if hasattr(self.page, 'open'):
             self.page.open(snack)
         else:
-            if self.page.overlay is None:
-                self.page.overlay = []
+            if self.page.overlay is None: self.page.overlay = []
             self.page.overlay.append(snack)
             self.page.update()
 
@@ -542,29 +594,20 @@ class MainWindow:
         enabled = e.control.value
         self.settings["strict_mode"] = enabled
         save_settings(self.settings)
-
         async with httpx.AsyncClient(trust_env=False) as client:
             try:
-                await client.post(f"{API_URL}/privacy/set_strict", json={
-                    "user_id": int(self.my_id),
-                    "enabled": enabled
-                })
-                if enabled:
-                    await self.sync_whitelist_to_server()
-                    self._show_error_snack("Privacy mode enabled. Only contacts can message you.", bgcolor="green")
-                else:
-                    self._show_error_snack("Privacy mode disabled. Anyone can message you.", bgcolor="green")
+                await client.post(f"{API_URL}/privacy/set_strict",
+                                  json={"user_id": int(self.my_id), "enabled": enabled})
+                if enabled: await self.sync_whitelist_to_server()
+                self._show_error_snack(f"Privacy mode {'enabled' if enabled else 'disabled'}.", bgcolor="green")
             except Exception as ex:
-                print(f"Privacy error: {ex}")
-                self._show_error_snack(f"Failed to update privacy: {ex}")
+                self._show_error_snack(f"Failed: {ex}")
 
     async def sync_whitelist_to_server(self):
         allowed_ids = [int(c["id"]) for c in self.my_contacts]
         async with httpx.AsyncClient(trust_env=False) as client:
             try:
-                await client.post(f"{API_URL}/privacy/update_whitelist", json={
-                    "user_id": int(self.my_id),
-                    "allowed_ids": allowed_ids
-                })
-            except Exception as ex:
-                print(f"Whitelist sync error: {ex}")
+                await client.post(f"{API_URL}/privacy/update_whitelist",
+                                  json={"user_id": int(self.my_id), "allowed_ids": allowed_ids})
+            except:
+                pass

@@ -5,14 +5,16 @@ RABBIT_URL = "amqp://g:g@10.0.0.103/"
 EXCHANGE_NAME = "direct_exchange"
 
 
-async def send(target_id: str, content: str, sender: str, timestamp: str):
+async def send(target_id: str, content: str, sender: str, timestamp: str, conversation_id: int = None, is_group: bool = False):
     if not target_id or not content:
         return
 
     message_data = {
-        "from": sender,
         "content": content,
-        "timestamp": timestamp
+        "from": sender,
+        "timestamp": timestamp,
+        "conversation_id": conversation_id,
+        "is_group": is_group
     }
 
     message_body = json.dumps(message_data, ensure_ascii=False).encode('utf-8')
@@ -37,10 +39,10 @@ async def send(target_id: str, content: str, sender: str, timestamp: str):
             )
 
             await exchange.publish(message, routing_key=target_id)
-            print(f"📤 Message sent to queue: {target_id}")
+            print(f"Message sent to queue: {target_id}")
 
     except Exception as e:
-        print(f"\n❌ RabbitMQ Error: {e}")
+        print(f"\nRabbitMQ Error: {e}")
     finally:
         if connection and not connection.is_closed:
             await connection.close()
