@@ -161,23 +161,46 @@ class MainWindow:
         privacy_switch = ft.Switch(label="Private mode",
                                    value=self.settings.get("strict_mode", False),
                                    on_change=self.toggle_strict_mode)
+        # Extended font options
         font_dropdown = ft.Dropdown(label="Font Family", value=self.theme.get("font_family"),
-                                    options=[ft.DropdownOption(key="Default"), ft.DropdownOption(key="Courier New"),
-                                             ft.DropdownOption(key="Consolas")],
+                                    options=[
+                                        ft.DropdownOption(key="Default"),
+                                        ft.DropdownOption(key="Arial"),
+                                        ft.DropdownOption(key="Courier New"),
+                                        ft.DropdownOption(key="Consolas"),
+                                        ft.DropdownOption(key="Georgia"),
+                                        ft.DropdownOption(key="Times New Roman"),
+                                        ft.DropdownOption(key="Verdana"),
+                                        ft.DropdownOption(key="Segoe UI"),
+                                        ft.DropdownOption(key="Roboto")
+                                    ],
                                     on_select=lambda e: change_color(e, "font_family"), width=260)
         size_dropdown = ft.Dropdown(label="Font Size", value=str(self.theme.get("font_size")),
                                     options=[ft.DropdownOption(key=str(s), text=str(s)) for s in
                                              [12, 14, 16, 18, 20, 24]],
                                     on_select=lambda e: change_color(e, "font_size"), width=260)
+        # Extended background color options
         bg_color_dropdown = ft.Dropdown(label="Background Color", value=self.theme.get("bg_color"),
-                                        options=[ft.DropdownOption(key="", text="Default"),
-                                                 ft.DropdownOption(key="#F0F8FF", text="Alice Blue"),
-                                                 ft.DropdownOption(key="#F5F5F5", text="Light Gray")],
+                                        options=[
+                                            ft.DropdownOption(key="", text="Default"),
+                                            ft.DropdownOption(key="#FFFFFF", text="White"),
+                                            ft.DropdownOption(key="#F0F8FF", text="Alice Blue"),
+                                            ft.DropdownOption(key="#F5F5F5", text="Light Gray"),
+                                            ft.DropdownOption(key="#E0F7FA", text="Light Cyan"),
+                                            ft.DropdownOption(key="#FFF9C4", text="Light Yellow"),
+                                            ft.DropdownOption(key="#C8E6C9", text="Light Green")
+                                        ],
                                         on_select=lambda e: change_color(e, "bg_color"), width=260)
+        # Extended bubble color options
         bubble_color_dropdown = ft.Dropdown(label="My Bubble Color", value=self.theme.get("bubble_color"),
-                                            options=[ft.DropdownOption(key="#DCF8C6", text="Classic Green"),
-                                                     ft.DropdownOption(key="#BBDEFB", text="Ocean Blue"),
-                                                     ft.DropdownOption(key="#FFECB3", text="Warm Yellow")],
+                                            options=[
+                                                ft.DropdownOption(key="#DCF8C6", text="Classic Green"),
+                                                ft.DropdownOption(key="#BBDEFB", text="Ocean Blue"),
+                                                ft.DropdownOption(key="#FFECB3", text="Warm Yellow"),
+                                                ft.DropdownOption(key="#FFCDD2", text="Pink"),
+                                                ft.DropdownOption(key="#C5CAE9", text="Lavender"),
+                                                ft.DropdownOption(key="#F8BBD0", text="Light Pink")
+                                            ],
                                             on_select=lambda e: change_color(e, "bubble_color"), width=260)
 
         self.settings_overlay = ft.Container(
@@ -219,11 +242,21 @@ class MainWindow:
                                                  alignment=ft.Alignment.CENTER, bgcolor="#80000000", expand=True)
 
     def show_settings(self):
+        # Toggle settings overlay
+        if self.settings_overlay.visible:
+            self.settings_overlay.visible = False
+            self.page.update()
+            return
         self.hide_overlays()
         self.settings_overlay.visible = True
         self.page.update()
 
     def show_add_contact(self):
+        # Toggle add contact overlay
+        if self.add_contact_overlay.visible:
+            self.add_contact_overlay.visible = False
+            self.page.update()
+            return
         self.hide_overlays()
         self.add_username_input.value = ""
         self.add_error_text.value = ""
@@ -231,6 +264,11 @@ class MainWindow:
         self.page.update()
 
     def show_create_group(self):
+        # Toggle create group overlay
+        if self.create_group_overlay.visible:
+            self.create_group_overlay.visible = False
+            self.page.update()
+            return
         self.hide_overlays()
         self.group_name_input.value = ""
         self.group_error_text.value = ""
