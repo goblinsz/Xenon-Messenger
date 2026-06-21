@@ -113,6 +113,16 @@ async def get_block_status_endpoint(req: BlockStatusRequest):
         return {"status": "ok", **status}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# Group messages route must be defined BEFORE the generic /messages/{id1}/{id2} route
+@app.get("/messages/group/{conv_id}")
+async def get_group_messages(conv_id: int):
+    try:
+        history = await get_conversation_messages(conv_id)
+        return {"status": "ok", "messages": history}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/send_message")
 async def send_message_endpoint(msg: MessageSend):
     try:
@@ -204,15 +214,6 @@ async def get_conversations(user_id: int):
     try:
         convs = await get_user_conversations(user_id)
         return {"status": "ok", "conversations": convs}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/messages/group/{conv_id}")
-async def get_group_messages(conv_id: int):
-    try:
-        history = await get_conversation_messages(conv_id)
-        return {"status": "ok", "messages": history}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
