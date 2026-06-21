@@ -10,24 +10,8 @@ from chat_history import save_message, save_group_message, read_group_chat, read
 from settings_manager import load_settings, save_settings
 from windows_toasts import WindowsToaster, Toast
 
-try:
-    from dotenv import load_dotenv
-    _dotenv_available = True
-except ImportError:
-    _dotenv_available = False
-
-_script_dir = os.path.abspath(os.path.dirname(__file__))
-_dotenv_path = os.path.join(_script_dir, '..', '..', '..', '.env')
-if _dotenv_available and os.path.isfile(_dotenv_path):
-    load_dotenv(_dotenv_path)
-
-API_URL = os.getenv("API_URL")
-if API_URL is None:
-    raise EnvironmentError("Missing API_URL in .env file")
-
-RABBIT_URL = os.getenv("RABBIT_URL")
-if RABBIT_URL is None:
-    raise EnvironmentError("Missing RABBIT_URL in .env file")
+API_URL = "http://localhost:8000"
+RABBIT_URL = "amqp://g:g@10.0.0.103/"
 
 
 class MainWindow:

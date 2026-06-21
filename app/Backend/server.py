@@ -12,18 +12,6 @@ from bd.bd import (
     get_user_conversations, get_conversation_participants
 )
 from sendk import send
-import os
-
-try:
-    from dotenv import load_dotenv
-    _dotenv_available = True
-except ImportError:
-    _dotenv_available = False
-
-_script_dir = os.path.abspath(os.path.dirname(__file__))
-_dotenv_path = os.path.join(_script_dir, '..', '.env')
-if _dotenv_available and os.path.isfile(_dotenv_path):
-    load_dotenv(_dotenv_path)
 
 
 @asynccontextmanager

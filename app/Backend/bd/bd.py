@@ -1,47 +1,14 @@
 import asyncio
 import asyncpg
 import bcrypt
-import os
 from typing import Optional, Tuple, List, Dict
 
-try:
-    from dotenv import load_dotenv
-    _dotenv_available = True
-except ImportError:
-    _dotenv_available = False
-
-# Locate .env relative to this script (two levels up from app/Backend/bd/bd.py)
-_script_dir = os.path.abspath(os.path.dirname(__file__))
-_dotenv_path = os.path.join(_script_dir, '..', '..', '.env')
-if _dotenv_available and os.path.isfile(_dotenv_path):
-    load_dotenv(_dotenv_path)
-
-_db_host = os.getenv("DB_HOST")
-_db_port = os.getenv("DB_PORT")
-_db_name = os.getenv("DB_NAME")
-_db_user = os.getenv("DB_USER")
-_db_password = os.getenv("DB_PASSWORD")
-
-missing = []
-if _db_host is None:
-    missing.append("DB_HOST")
-if _db_port is None:
-    missing.append("DB_PORT")
-if _db_name is None:
-    missing.append("DB_NAME")
-if _db_user is None:
-    missing.append("DB_USER")
-if _db_password is None:
-    missing.append("DB_PASSWORD")
-if missing:
-    raise EnvironmentError(f"Missing environment variables in .env file: {', '.join(missing)}")
-
 DB_CONFIG = {
-    "database": _db_name,
-    "user": _db_user,
-    "password": _db_password,
-    "host": _db_host,
-    "port": _db_port
+    "database": "postgres",
+    "user": "postgres",
+    "password": "postgres",
+    "host": "10.0.0.103",
+    "port": 5432
 }
 pool: Optional[asyncpg.Pool] = None
 
