@@ -134,6 +134,10 @@ class MainWindow:
             try:
                 with open(self.contacts_file, "r", encoding="utf-8") as f:
                     contacts = json.load(f)
+                    # Ensure all ids are stored as strings to avoid type mismatches later
+                    for c in contacts:
+                        if isinstance(c.get("id"), int):
+                            c["id"] = str(c["id"])
                     return [c for c in contacts if str(c.get("id")) != str(self.my_id)]
             except Exception:
                 return []
@@ -500,12 +504,15 @@ class MainWindow:
             pass
 
     async def verify_and_add_contact(self, sender_id: str):
-        if not any(c["id"] == sender_id for c in self.my_contacts):
+        # Convert sender_id to int for comparison with stored ids (which may be ints or strings)
+        sender_int = int(sender_id)
+        if not any(int(c["id"]) == sender_int for c in self.my_contacts):
             async with httpx.AsyncClient(trust_env=False) as client:
                 try:
                     resp = await client.get(f"{API_URL}/users/id/{sender_id}")
                     if resp.status_code == 200:
                         u = resp.json()
+                        # Store id as string for consistency
                         self.my_contacts.append({"id": str(u["id"]), "username": u["username"], "name": u["name"]})
                         self.save_contacts_json()
                         await self.load_contacts()
