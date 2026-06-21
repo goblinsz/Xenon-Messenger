@@ -2,12 +2,15 @@ import flet as ft
 import httpx
 import os
 from settings_manager import load_settings, save_settings
+from dotenv import load_dotenv
 
-try:
-    from dotenv import load_dotenv, find_dotenv
-    load_dotenv(find_dotenv())
-except ImportError:
-    pass
+# Locate .env relative to this script (three levels up from app/client/ui/auth.py)
+_script_dir = os.path.abspath(os.path.dirname(__file__))
+_dotenv_path = os.path.join(_script_dir, '..', '..', '..', '.env')
+if os.path.isfile(_dotenv_path):
+    load_dotenv(_dotenv_path)
+else:
+    load_dotenv()
 
 API_URL = os.getenv("API_URL")
 if API_URL is None:

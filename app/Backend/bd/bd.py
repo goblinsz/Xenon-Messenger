@@ -3,12 +3,15 @@ import asyncpg
 import bcrypt
 import os
 from typing import Optional, Tuple, List, Dict
+from dotenv import load_dotenv
 
-try:
-    from dotenv import load_dotenv, find_dotenv
-    load_dotenv(find_dotenv())
-except ImportError:
-    pass
+# Locate .env relative to this script (two levels up from app/Backend/bd/bd.py)
+_script_dir = os.path.abspath(os.path.dirname(__file__))
+_dotenv_path = os.path.join(_script_dir, '..', '..', '.env')
+if os.path.isfile(_dotenv_path):
+    load_dotenv(_dotenv_path)
+else:
+    load_dotenv()  # fallback
 
 _db_host = os.getenv("DB_HOST")
 _db_port = os.getenv("DB_PORT")
@@ -35,7 +38,7 @@ DB_CONFIG = {
     "user": _db_user,
     "password": _db_password,
     "host": _db_host,
-    "port": (_db_port)
+    "port": int(_db_port)
 }
 pool: Optional[asyncpg.Pool] = None
 

@@ -12,12 +12,16 @@ from bd.bd import (
     get_user_conversations, get_conversation_participants
 )
 from sendk import send
+import os
+from dotenv import load_dotenv
 
-try:
-    from dotenv import load_dotenv, find_dotenv
-    load_dotenv(find_dotenv())
-except ImportError:
-    pass
+# Locate .env relative to this script (one level up from app/Backend/server.py)
+_script_dir = os.path.abspath(os.path.dirname(__file__))
+_dotenv_path = os.path.join(_script_dir, '..', '.env')
+if os.path.isfile(_dotenv_path):
+    load_dotenv(_dotenv_path)
+else:
+    load_dotenv()
 
 
 @asynccontextmanager

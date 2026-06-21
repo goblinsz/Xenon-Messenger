@@ -1,12 +1,15 @@
 import json
 import aio_pika
 import os
+from dotenv import load_dotenv
 
-try:
-    from dotenv import load_dotenv, find_dotenv
-    load_dotenv(find_dotenv())
-except ImportError:
-    pass
+# Locate .env relative to this script (one level up from app/Backend/sendk.py)
+_script_dir = os.path.abspath(os.path.dirname(__file__))
+_dotenv_path = os.path.join(_script_dir, '..', '.env')
+if os.path.isfile(_dotenv_path):
+    load_dotenv(_dotenv_path)
+else:
+    load_dotenv()
 
 RABBIT_URL = os.getenv("RABBIT_URL")
 if RABBIT_URL is None:
