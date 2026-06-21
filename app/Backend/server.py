@@ -3,6 +3,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from datetime import datetime
 from typing import List
+from dotenv import load_dotenv, find_dotenv
 from bd.bd import (
     init_pool, close_pool, register_user, authenticate_user, get_all_users_list,
     get_user_by_username, get_user_profile_by_id, block_user, is_blocked,
@@ -13,6 +14,7 @@ from bd.bd import (
 )
 from sendk import send
 
+load_dotenv(find_dotenv())
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
