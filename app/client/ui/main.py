@@ -450,7 +450,12 @@ class MainWindow:
             try:
                 resp = await client.get(f"{API_URL}/messages/{self.my_id}/{friend_id}")
                 if resp.status_code == 200:
-                    messages_data = resp.json().get("messages", [])
+                    data = resp.json()
+                    # The server might return a list directly, or a dict with "messages" key
+                    if isinstance(data, list):
+                        messages_data = data
+                    else:
+                        messages_data = data.get("messages", [])
                     # Sort by timestamp ascending
                     messages_data.sort(key=lambda m: str(m.get('timestamp', '')))
             except:
@@ -475,11 +480,22 @@ class MainWindow:
             try:
                 resp = await client.get(f"{API_URL}/messages/group/{conv_id}")
                 if resp.status_code == 200:
-                    messages_data = resp.json().get("messages", [])
+                    data = resp.json()
+                    # The server might return a list directly, or a dict with "messages" key
+                    if isinstance(data, list):
+                        messages_data = data
+                    else:
+                        messages_data = data.get("messages", [])
                     # Sort by timestamp ascending
                     messages_data.sort(key=lambda m: str(m.get('timestamp', '')))
             except:
                 pass
+
+        if not messages_data:
+            # Fallback to local cache
+            local_msgs = await read_group_chat(int(self.my_id), int(conv_id))
+            if local_msgs:
+                messages_data = local_msgs
 
         for msg in messages_data:
             is_mine = str(msg["sender"]) == str(self.my_id)
