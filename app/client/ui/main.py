@@ -480,7 +480,7 @@ class MainWindow:
         # Always fetch from API to guarantee correct order
         async with httpx.AsyncClient(trust_env=False) as client:
             try:
-                resp = await client.get(f"{API_URL}/messages/group/{conv_id}")
+                resp = await client.get(f"{API_URL}/group_messages/{conv_id}")
                 if resp.status_code == 200:
                     data = resp.json()
                     # The server might return a list directly, or a dict with "messages" key
