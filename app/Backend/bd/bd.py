@@ -7,12 +7,32 @@ from typing import Optional, Tuple, List, Dict
 
 load_dotenv(find_dotenv())
 
+_db_host = os.getenv("DB_HOST")
+_db_port = os.getenv("DB_PORT")
+_db_name = os.getenv("DB_NAME")
+_db_user = os.getenv("DB_USER")
+_db_password = os.getenv("DB_PASSWORD")
+
+missing = []
+if _db_host is None:
+    missing.append("DB_HOST")
+if _db_port is None:
+    missing.append("DB_PORT")
+if _db_name is None:
+    missing.append("DB_NAME")
+if _db_user is None:
+    missing.append("DB_USER")
+if _db_password is None:
+    missing.append("DB_PASSWORD")
+if missing:
+    raise EnvironmentError(f"Missing environment variables in .env file: {', '.join(missing)}")
+
 DB_CONFIG = {
-    "database": os.getenv("DB_NAME", "postgres"),
-    "user": os.getenv("DB_USER", "postgres"),
-    "password": os.getenv("DB_PASSWORD", "postgres"),
-    "host": os.getenv("DB_HOST", "10.0.0.103"),
-    "port": int(os.getenv("DB_PORT", 5432))
+    "database": _db_name,
+    "user": _db_user,
+    "password": _db_password,
+    "host": _db_host,
+    "port": int(_db_port)
 }
 pool: Optional[asyncpg.Pool] = None
 

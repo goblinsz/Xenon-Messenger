@@ -6,7 +6,9 @@ from settings_manager import load_settings, save_settings
 
 load_dotenv(find_dotenv())
 
-API_URL = os.getenv("API_URL", "http://localhost:8000")
+API_URL = os.getenv("API_URL")
+if API_URL is None:
+    raise EnvironmentError("Missing API_URL in .env file")
 
 
 def build_auth_window(page: ft.Page, on_success):

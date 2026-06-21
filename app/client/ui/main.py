@@ -13,8 +13,13 @@ from windows_toasts import WindowsToaster, Toast
 
 load_dotenv(find_dotenv())
 
-API_URL = os.getenv("API_URL", "http://localhost:8000")
-RABBIT_URL = os.getenv("RABBIT_URL", "amqp://g:g@10.0.0.103/")
+API_URL = os.getenv("API_URL")
+if API_URL is None:
+    raise EnvironmentError("Missing API_URL in .env file")
+
+RABBIT_URL = os.getenv("RABBIT_URL")
+if RABBIT_URL is None:
+    raise EnvironmentError("Missing RABBIT_URL in .env file")
 
 
 class MainWindow:
