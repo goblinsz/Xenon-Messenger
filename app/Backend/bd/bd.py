@@ -35,7 +35,7 @@ DB_CONFIG = {
     "user": _db_user,
     "password": _db_password,
     "host": _db_host,
-    "port": int(_db_port)
+    "port": (_db_port)
 }
 pool: Optional[asyncpg.Pool] = None
 
