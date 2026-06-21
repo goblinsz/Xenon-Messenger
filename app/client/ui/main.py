@@ -445,26 +445,16 @@ class MainWindow:
         self.page.update()
 
         messages_data = []
-        # Try local cache first
-        local_msgs = await read_chat(int(self.my_id), int(self.my_id), int(friend_id))
-        if local_msgs:
-            messages_data = local_msgs
-        else:
-            async with httpx.AsyncClient(trust_env=False) as client:
-                try:
-                    resp = await client.get(f"{API_URL}/messages/{self.my_id}/{friend_id}")
-                    if resp.status_code == 200:
-                        messages_data = resp.json().get("messages", [])
-                        # Save fetched messages locally
-                        for msg in messages_data:
-                            await save_message(int(self.my_id),
-                                               msg.get('timestamp', ''),
-                                               int(msg['sender']),
-                                               int(self.my_id) if str(msg['sender']) == self.my_id else int(friend_id),
-                                               msg['content'],
-                                               str(msg['sender']) == self.my_id)
-                except:
-                    pass
+        # Always fetch from API to guarantee correct order
+        async with httpx.AsyncClient(trust_env=False) as client:
+            try:
+                resp = await client.get(f"{API_URL}/messages/{self.my_id}/{friend_id}")
+                if resp.status_code == 200:
+                    messages_data = resp.json().get("messages", [])
+                    # Sort by timestamp ascending
+                    messages_data.sort(key=lambda m: str(m.get('timestamp', '')))
+            except:
+                pass
 
         bubbles = []
         for msg in messages_data:
@@ -480,24 +470,16 @@ class MainWindow:
         self.page.update()
 
         messages_data = []
-        # Try local cache first
-        local_msgs = await read_group_chat(int(self.my_id), int(conv_id))
-        if local_msgs:
-            messages_data = local_msgs
-        else:
-            async with httpx.AsyncClient(trust_env=False) as client:
-                try:
-                    resp = await client.get(f"{API_URL}/messages/group/{conv_id}")
-                    if resp.status_code == 200:
-                        messages_data = resp.json().get("messages", [])
-                        # Cache them locally
-                        for msg in messages_data:
-                            await save_group_message(int(self.my_id), int(conv_id),
-                                                     msg.get('timestamp', ''),
-                                                     int(msg['sender']),
-                                                     msg['content'])
-                except:
-                    pass
+        # Always fetch from API to guarantee correct order
+        async with httpx.AsyncClient(trust_env=False) as client:
+            try:
+                resp = await client.get(f"{API_URL}/messages/group/{conv_id}")
+                if resp.status_code == 200:
+                    messages_data = resp.json().get("messages", [])
+                    # Sort by timestamp ascending
+                    messages_data.sort(key=lambda m: str(m.get('timestamp', '')))
+            except:
+                pass
 
         for msg in messages_data:
             is_mine = str(msg["sender"]) == str(self.my_id)
