@@ -2,10 +2,13 @@ import asyncio
 import asyncpg
 import bcrypt
 import os
-from dotenv import load_dotenv, find_dotenv
 from typing import Optional, Tuple, List, Dict
 
-load_dotenv(find_dotenv())
+try:
+    from dotenv import load_dotenv, find_dotenv
+    load_dotenv(find_dotenv())
+except ImportError:
+    pass
 
 _db_host = os.getenv("DB_HOST")
 _db_port = os.getenv("DB_PORT")

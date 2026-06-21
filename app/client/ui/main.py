@@ -5,13 +5,16 @@ import aio_pika
 import json
 import asyncio
 import os
-from dotenv import load_dotenv, find_dotenv
 
 from chat_history import save_message, save_group_message, read_group_chat, read_chat
 from settings_manager import load_settings, save_settings
 from windows_toasts import WindowsToaster, Toast
 
-load_dotenv(find_dotenv())
+try:
+    from dotenv import load_dotenv, find_dotenv
+    load_dotenv(find_dotenv())
+except ImportError:
+    pass
 
 API_URL = os.getenv("API_URL")
 if API_URL is None:

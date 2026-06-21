@@ -1,9 +1,12 @@
 import json
 import aio_pika
 import os
-from dotenv import load_dotenv, find_dotenv
 
-load_dotenv(find_dotenv())
+try:
+    from dotenv import load_dotenv, find_dotenv
+    load_dotenv(find_dotenv())
+except ImportError:
+    pass
 
 RABBIT_URL = os.getenv("RABBIT_URL")
 if RABBIT_URL is None:

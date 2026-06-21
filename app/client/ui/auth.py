@@ -1,10 +1,13 @@
 import flet as ft
 import httpx
 import os
-from dotenv import load_dotenv, find_dotenv
 from settings_manager import load_settings, save_settings
 
-load_dotenv(find_dotenv())
+try:
+    from dotenv import load_dotenv, find_dotenv
+    load_dotenv(find_dotenv())
+except ImportError:
+    pass
 
 API_URL = os.getenv("API_URL")
 if API_URL is None:
