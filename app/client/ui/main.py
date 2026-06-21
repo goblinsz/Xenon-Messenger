@@ -11,7 +11,7 @@ from chat_history import save_message, save_group_message, read_group_chat, read
 from settings_manager import load_settings, save_settings
 from windows_toasts import WindowsToaster, Toast
 
-API_URL = "http://localhost:8000"
+API_URL = "http://10.0.0.103:8000"
 RABBIT_URL = "amqp://g:g@10.0.0.103/"
 
 
@@ -458,8 +458,10 @@ class MainWindow:
                         messages_data = data.get("messages", [])
                     # Sort by timestamp ascending
                     messages_data.sort(key=lambda m: str(m.get('timestamp', '')))
-            except:
-                pass
+                else:
+                    print(f"load_chat_history HTTP {resp.status_code}: {resp.text}")
+            except Exception as e:
+                print(f"load_chat_history error: {e}")
 
         bubbles = []
         for msg in messages_data:
@@ -494,8 +496,10 @@ class MainWindow:
                                                  msg.get('timestamp', ''),
                                                  int(msg['sender']),
                                                  msg['content'])
-            except:
-                pass
+                else:
+                    print(f"load_group_history HTTP {resp.status_code}: {resp.text}")
+            except Exception as e:
+                print(f"load_group_history error: {e}")
 
         bubbles = []
         for msg in messages_data:
@@ -564,6 +568,7 @@ class MainWindow:
                         if content:
                             if conv_id:
                                 # group message
+                                print(f"Received group message: conv_id={conv_id}, sender={sender}")
                                 await save_group_message(int(self.my_id), int(conv_id), timestamp, int(sender), content)
                                 if self.current_group_id == str(conv_id):
                                     self.page.run_task(self._append_message_safe, sender, content, False)
