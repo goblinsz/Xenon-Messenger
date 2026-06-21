@@ -7,7 +7,7 @@ import asyncio
 import os
 
 
-from chat_history import read_chat, save_message, read_group_chat, save_group_message
+from chat_history import read_chat, save_message, read_group_chat
 from settings_manager import load_settings, save_settings
 from windows_toasts import WindowsToaster, Toast
 
@@ -28,12 +28,18 @@ class MainWindow:
 
         self.settings = load_settings()
         self.theme = self.settings.get("theme", {})
+
+        # initialize attributes that apply_theme will touch
+        self.current_font = None
+        self.current_size = 16
+        self.my_bubble_color = "#DCF8C6"
+
         self.stop_event = asyncio.Event()
 
-        self.status_text = ft.Text(f"Logged in as: {my_name} (ID: {my_id})", size=16, color="gray", weight="bold")
+        self.status_text = ft.Text(f"Logged in as: {my_name} (ID: {my_id})", size=16, color="gray", weight=ft.FontWeight.BOLD)
         self.block_btn = ft.IconButton(ft.Icons.BLOCK, tooltip="Block User", visible=False, icon_color="red",
                                        on_click=self.handle_block_toggle)
-        self.block_warning = ft.Text("", size=14, weight="bold", visible=False)
+        self.block_warning = ft.Text("", size=14, weight=ft.FontWeight.BOLD, visible=False)
 
         self.message_history = ft.ListView(expand=True, spacing=10, padding=20, auto_scroll=True, controls=[])
         self.friends_list = ft.ListView(expand=1, spacing=10, padding=20, controls=[])
@@ -47,9 +53,9 @@ class MainWindow:
             controls=[
                 ft.Row(
                     controls=[
-                        ft.Text("Xenon Messenger", size=22, weight="bold"),
+                        ft.Text("Xenon Messenger", size=22, weight=ft.FontWeight.BOLD),
                         ft.VerticalDivider(width=1, thickness=1, color="grey"),
-                        ft.Text(f"@{self.my_username}", size=14, color="blue", weight="bold"),
+                        ft.Text(f"@{self.my_username}", size=14, color="blue", weight=ft.FontWeight.BOLD),
                         ft.Text(f"(ID: {self.my_id})", size=12, color="gray", italic=True)
                     ],
                     vertical_alignment=ft.CrossAxisAlignment.CENTER, spacing=10
@@ -68,10 +74,10 @@ class MainWindow:
 
         self.left_column = ft.Column(
             controls=[
-                ft.Text("Groups", size=18, weight="bold"),
+                ft.Text("Groups", size=18, weight=ft.FontWeight.BOLD),
                 self.groups_list,
                 ft.Divider(),
-                ft.Text("Contacts", size=18, weight="bold"),
+                ft.Text("Contacts", size=18, weight=ft.FontWeight.BOLD),
                 self.friends_list
             ],
             width=300
@@ -119,7 +125,7 @@ class MainWindow:
             await self.sync_whitelist_to_server()
         asyncio.create_task(self.listen_to_my_queue())
 
-    async def handle_logout(self, e):
+    async def handle_logout(self, _):
         self.stop_event.set()
         await self.on_logout()
 
@@ -175,7 +181,7 @@ class MainWindow:
             content=ft.Card(
                 content=ft.Container(
                     content=ft.Column([
-                        ft.Text("Customization Settings", size=20, weight="bold"),
+                        ft.Text("Customization Settings", size=20, weight=ft.FontWeight.BOLD),
                         privacy_switch,
                         ft.Switch(label="Dark Mode", value=(self.page.theme_mode == ft.ThemeMode.DARK),
                                   on_change=toggle_dark_mode),
@@ -190,7 +196,7 @@ class MainWindow:
         self.add_username_input = ft.TextField(hint_text="Enter exact username", autofocus=True)
         self.add_error_text = ft.Text("", color="red", size=12)
         self.add_contact_overlay = ft.Container(visible=False, content=ft.Card(content=ft.Container(content=ft.Column(
-            [ft.Text("Add Contact", size=20, weight="bold"), self.add_username_input, self.add_error_text, ft.Row(
+            [ft.Text("Add Contact", size=20, weight=ft.FontWeight.BOLD), self.add_username_input, self.add_error_text, ft.Row(
                 [ft.TextButton("Cancel", on_click=lambda _: self.hide_overlays()),
                  ft.TextButton("Search & Add", on_click=self.add_new_contact)], alignment=ft.MainAxisAlignment.END)],
             tight=True, spacing=10), padding=20, width=300)), alignment=ft.Alignment.CENTER, bgcolor="#80000000",
@@ -200,8 +206,8 @@ class MainWindow:
         self.group_participants_list = ft.ListView(height=200, spacing=5)
         self.group_error_text = ft.Text("", color="red", size=12)
         self.create_group_overlay = ft.Container(visible=False, content=ft.Card(content=ft.Container(content=ft.Column(
-            [ft.Text("Create Group", size=20, weight="bold"), self.group_name_input,
-             ft.Text("Select participants:", size=14, weight="bold"), self.group_participants_list,
+            [ft.Text("Create Group", size=20, weight=ft.FontWeight.BOLD), self.group_name_input,
+             ft.Text("Select participants:", size=14, weight=ft.FontWeight.BOLD), self.group_participants_list,
              self.group_error_text, ft.Row([ft.TextButton("Cancel", on_click=lambda _: self.hide_overlays()),
                                             ft.TextButton("Create", on_click=self.create_group)],
                                            alignment=ft.MainAxisAlignment.END)], tight=True, spacing=10), padding=20,
@@ -238,7 +244,7 @@ class MainWindow:
         self.create_group_overlay.visible = False
         self.page.update()
 
-    async def create_group(self, e):
+    async def create_group(self, _):
         name = self.group_name_input.value.strip()
         if not name:
             self.group_error_text.value = "Name is required"
@@ -265,7 +271,7 @@ class MainWindow:
                 self.group_error_text.value = str(ex)
                 self.page.update()
 
-    async def add_new_contact(self, e):
+    async def add_new_contact(self, _):
         username = self.add_username_input.value.strip()
         if not username:
             self.add_error_text.value = "Username cannot be empty"
@@ -297,7 +303,7 @@ class MainWindow:
                 self.add_error_text.value = f"Server error: {ex}"
                 self.page.update()
 
-    async def handle_block_toggle(self, e):
+    async def handle_block_toggle(self, _):
         if not self.current_friend_id: return
         is_blocking = not getattr(self, 'i_blocked_them', False)
         endpoint = "/block" if is_blocking else "/unblock"
@@ -388,7 +394,7 @@ class MainWindow:
                 if resp.status_code == 200:
                     for c in resp.json().get("conversations", []):
                         self.groups_list.controls.append(ft.ListTile(
-                            title=ft.Text(c["name"], weight="bold"), leading=ft.Icon(ft.Icons.GROUP),
+                            title=ft.Text(c["name"], weight=ft.FontWeight.BOLD), leading=ft.Icon(ft.Icons.GROUP),
                             on_click=lambda e, cid=str(c["id"]), cname=c["name"]: self.select_group(cid, cname)
                         ))
             except Exception as e:
@@ -481,12 +487,8 @@ class MainWindow:
         sender_name = self.get_sender_name(sender_id)
         snack = ft.SnackBar(content=ft.Text(f"New message from {sender_name}: {content}"), action="View",
                             on_action=lambda e: self.select_friend(sender_id, sender_name))
-        if hasattr(self.page, 'open'):
-            self.page.open(snack)
-        else:
-            if self.page.overlay is None: self.page.overlay = []
-            self.page.overlay.append(snack)
-            self.page.update()
+        self.page.overlay.append(snack)
+        self.page.update()
 
     def show_desktop_notification(self, sender_title: str, message_content: str):
         try:
@@ -560,7 +562,7 @@ class MainWindow:
 
         await save_message(int(self.my_id), timestamp, int(sender), int(self.my_id), content, False)
 
-    async def send_message(self, e):
+    async def send_message(self, _):
         if not self.current_friend_id or not self.msg_input.value:
             return
 
@@ -590,12 +592,8 @@ class MainWindow:
 
     def _show_error_snack(self, message: str, bgcolor: str = "red"):
         snack = ft.SnackBar(content=ft.Text(message, color="white"), bgcolor=bgcolor, duration=4000)
-        if hasattr(self.page, 'open'):
-            self.page.open(snack)
-        else:
-            if self.page.overlay is None: self.page.overlay = []
-            self.page.overlay.append(snack)
-            self.page.update()
+        self.page.overlay.append(snack)
+        self.page.update()
 
     async def toggle_strict_mode(self, e):
         enabled = e.control.value
