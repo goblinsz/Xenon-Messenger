@@ -9,15 +9,17 @@ import os
 from chat_history import save_message, save_group_message, read_group_chat, read_chat
 from settings_manager import load_settings, save_settings
 from windows_toasts import WindowsToaster, Toast
-from dotenv import load_dotenv
 
-# Locate .env relative to this script (three levels up from app/client/ui/main.py)
+try:
+    from dotenv import load_dotenv
+    _dotenv_available = True
+except ImportError:
+    _dotenv_available = False
+
 _script_dir = os.path.abspath(os.path.dirname(__file__))
 _dotenv_path = os.path.join(_script_dir, '..', '..', '..', '.env')
-if os.path.isfile(_dotenv_path):
+if _dotenv_available and os.path.isfile(_dotenv_path):
     load_dotenv(_dotenv_path)
-else:
-    load_dotenv()
 
 API_URL = os.getenv("API_URL")
 if API_URL is None:

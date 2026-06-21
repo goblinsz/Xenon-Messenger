@@ -3,15 +3,18 @@ import asyncpg
 import bcrypt
 import os
 from typing import Optional, Tuple, List, Dict
-from dotenv import load_dotenv
+
+try:
+    from dotenv import load_dotenv
+    _dotenv_available = True
+except ImportError:
+    _dotenv_available = False
 
 # Locate .env relative to this script (two levels up from app/Backend/bd/bd.py)
 _script_dir = os.path.abspath(os.path.dirname(__file__))
 _dotenv_path = os.path.join(_script_dir, '..', '..', '.env')
-if os.path.isfile(_dotenv_path):
+if _dotenv_available and os.path.isfile(_dotenv_path):
     load_dotenv(_dotenv_path)
-else:
-    load_dotenv()  # fallback
 
 _db_host = os.getenv("DB_HOST")
 _db_port = os.getenv("DB_PORT")
