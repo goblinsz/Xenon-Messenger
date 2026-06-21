@@ -1,8 +1,12 @@
 import flet as ft
 import httpx
+import os
+from dotenv import load_dotenv, find_dotenv
 from settings_manager import load_settings, save_settings
 
-API_URL = "http://localhost:8000"
+load_dotenv(find_dotenv())
+
+API_URL = os.getenv("API_URL", "http://localhost:8000")
 
 
 def build_auth_window(page: ft.Page, on_success):

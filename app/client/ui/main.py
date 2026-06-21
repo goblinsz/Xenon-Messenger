@@ -5,14 +5,16 @@ import aio_pika
 import json
 import asyncio
 import os
-
+from dotenv import load_dotenv, find_dotenv
 
 from chat_history import save_message, save_group_message, read_group_chat, read_chat
 from settings_manager import load_settings, save_settings
 from windows_toasts import WindowsToaster, Toast
 
-API_URL = "http://localhost:8000"
-RABBIT_URL = "amqp://g:g@10.0.0.103/"
+load_dotenv(find_dotenv())
+
+API_URL = os.getenv("API_URL", "http://localhost:8000")
+RABBIT_URL = os.getenv("RABBIT_URL", "amqp://g:g@10.0.0.103/")
 
 
 class MainWindow:
