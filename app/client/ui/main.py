@@ -7,7 +7,7 @@ import asyncio
 import os
 
 
-from chat_history import save_message, save_group_message
+from chat_history import save_message, save_group_message, read_group_chat, read_chat
 from settings_manager import load_settings, save_settings
 from windows_toasts import WindowsToaster, Toast
 
@@ -445,13 +445,26 @@ class MainWindow:
         self.page.update()
 
         messages_data = []
-        async with httpx.AsyncClient(trust_env=False) as client:
-            try:
-                resp = await client.get(f"{API_URL}/messages/{self.my_id}/{friend_id}")
-                if resp.status_code == 200:
-                    messages_data = resp.json().get("messages", [])
-            except:
-                pass
+        # Try local cache first
+        local_msgs = await read_chat(int(self.my_id), int(self.my_id), int(friend_id))
+        if local_msgs:
+            messages_data = local_msgs
+        else:
+            async with httpx.AsyncClient(trust_env=False) as client:
+                try:
+                    resp = await client.get(f"{API_URL}/messages/{self.my_id}/{friend_id}")
+                    if resp.status_code == 200:
+                        messages_data = resp.json().get("messages", [])
+                        # Save fetched messages locally
+                        for msg in messages_data:
+                            await save_message(int(self.my_id),
+                                               msg.get('timestamp', ''),
+                                               int(msg['sender']),
+                                               int(self.my_id) if str(msg['sender']) == self.my_id else int(friend_id),
+                                               msg['content'],
+                                               str(msg['sender']) == self.my_id)
+                except:
+                    pass
 
         bubbles = []
         for msg in messages_data:
@@ -467,19 +480,30 @@ class MainWindow:
         self.page.update()
 
         messages_data = []
-        async with httpx.AsyncClient(trust_env=False) as client:
-            try:
-                resp = await client.get(f"{API_URL}/messages/group/{conv_id}")
-                if resp.status_code == 200:
-                    messages_data = resp.json().get("messages", [])
-            except:
-                pass
+        # Try local cache first
+        local_msgs = await read_group_chat(int(self.my_id), int(conv_id))
+        if local_msgs:
+            messages_data = local_msgs
+        else:
+            async with httpx.AsyncClient(trust_env=False) as client:
+                try:
+                    resp = await client.get(f"{API_URL}/messages/group/{conv_id}")
+                    if resp.status_code == 200:
+                        messages_data = resp.json().get("messages", [])
+                        # Cache them locally
+                        for msg in messages_data:
+                            await save_group_message(int(self.my_id), int(conv_id),
+                                                     msg.get('timestamp', ''),
+                                                     int(msg['sender']),
+                                                     msg['content'])
+                except:
+                    pass
 
         for msg in messages_data:
             is_mine = str(msg["sender"]) == str(self.my_id)
+            sender_name = "You" if is_mine else self.get_sender_name(str(msg["sender"]))
             self.message_history.controls.append(
-                self.build_chat_bubble(f"{self.get_sender_name(str(msg['sender']))}: {msg['content']}",
-                                       is_mine))
+                self.build_chat_bubble(f"{sender_name}: {msg['content']}", is_mine))
         self.page.update()
 
     def trigger_notification(self, sender_id, content, conv_id=None):
