@@ -491,18 +491,14 @@ class MainWindow:
             except:
                 pass
 
-        if not messages_data:
-            # Fallback to local cache
-            local_msgs = await read_group_chat(int(self.my_id), int(conv_id))
-            if local_msgs:
-                messages_data = local_msgs
-
+        bubbles = []
         for msg in messages_data:
             is_mine = str(msg["sender"]) == str(self.my_id)
             sender_name = "You" if is_mine else self.get_sender_name(str(msg["sender"]))
-            self.message_history.controls.append(
-                self.build_chat_bubble(f"{sender_name}: {msg['content']}", is_mine))
-        self.page.update()
+            bubbles.append(self.build_chat_bubble(f"{sender_name}: {msg['content']}", is_mine))
+
+        self.message_history.controls = bubbles
+        self.message_history.update()
 
     def trigger_notification(self, sender_id, content, conv_id=None):
         if conv_id:
