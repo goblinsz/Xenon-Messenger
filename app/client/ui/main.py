@@ -7,7 +7,7 @@ import asyncio
 import os
 
 
-from chat_history import save_message
+from chat_history import save_message, save_group_message
 from settings_manager import load_settings, save_settings
 from windows_toasts import WindowsToaster, Toast
 
@@ -353,7 +353,8 @@ class MainWindow:
         else:
             self.block_warning.visible = False
             self.msg_input.disabled = False
-            self.send_btn.disabled = True if self.current_group_id else False
+            # Enable send button for both direct and group chats
+            self.send_btn.disabled = False
 
         if getattr(self, 'i_blocked_them', False):
             self.block_btn.icon = ft.Icons.CHECK_CIRCLE_OUTLINE
@@ -481,10 +482,16 @@ class MainWindow:
                                        is_mine))
         self.page.update()
 
-    def trigger_notification(self, sender_id, content):
-        sender_name = self.get_sender_name(sender_id)
-        snack = ft.SnackBar(content=ft.Text(f"New message from {sender_name}: {content}"), action="View",
-                            on_action=lambda e: self.select_friend(sender_id, sender_name))
+    def trigger_notification(self, sender_id, content, conv_id=None):
+        if conv_id:
+            # group message notification
+            sender_name = self.get_sender_name(sender_id)
+            snack = ft.SnackBar(content=ft.Text(f"New group message from {sender_name}: {content}"), action="View",
+                                on_action=lambda e: self.select_group(conv_id, "Group"))
+        else:
+            sender_name = self.get_sender_name(sender_id)
+            snack = ft.SnackBar(content=ft.Text(f"New message from {sender_name}: {content}"), action="View",
+                                on_action=lambda e: self.select_friend(sender_id, sender_name))
         self.page.overlay.append(snack)
         self.page.update()
 
@@ -528,18 +535,29 @@ class MainWindow:
                         content = data.get('content')
                         sender = str(data.get('from'))
                         timestamp = data.get('timestamp')
+                        conv_id = data.get('conversation_id')  # may be present for group messages
 
                         if content:
-                            await self.verify_and_add_contact(sender)
-                            await save_message(int(self.my_id), timestamp, int(sender), int(self.my_id), content, False)
-
-                            if sender == self.current_friend_id:
-                                self.page.run_task(self._append_message_safe, sender, content, False)
+                            if conv_id:
+                                # group message
+                                await save_group_message(int(self.my_id), int(conv_id), timestamp, int(sender), content)
+                                if self.current_group_id == str(conv_id):
+                                    self.page.run_task(self._append_message_safe, sender, content, False)
+                                else:
+                                    sender_name = self.get_sender_name(sender)
+                                    self.trigger_notification(sender, content, conv_id=str(conv_id))
+                                    self.show_desktop_notification(sender_name, content)
                             else:
-                                sender_name = next((c["name"] for c in self.my_contacts if c["id"] == sender),
-                                                   f"User {sender}")
-                                self.trigger_notification(sender, content)
-                                self.show_desktop_notification(sender_name, content)
+                                # direct message
+                                await self.verify_and_add_contact(sender)
+                                await save_message(int(self.my_id), timestamp, int(sender), int(self.my_id), content, False)
+
+                                if sender == self.current_friend_id:
+                                    self.page.run_task(self._append_message_safe, sender, content, False)
+                                else:
+                                    sender_name = self.get_sender_name(sender)
+                                    self.trigger_notification(sender, content)
+                                    self.show_desktop_notification(sender_name, content)
 
                 await queue.consume(on_message)
                 await self.stop_event.wait()
@@ -564,7 +582,7 @@ class MainWindow:
         await save_message(int(self.my_id), timestamp, int(sender), int(self.my_id), content, False)
 
     async def send_message(self, _):
-        if not self.current_friend_id or not self.msg_input.value:
+        if not self.msg_input.value:
             return
 
         text = self.msg_input.value
@@ -574,18 +592,35 @@ class MainWindow:
         async def do_send():
             async with httpx.AsyncClient(trust_env=False) as client:
                 try:
-                    resp = await client.post(f"{API_URL}/send_message", json={
-                        "sender_id": int(self.my_id),
-                        "target_id": int(self.current_friend_id),
-                        "content": text
-                    })
-
-                    if resp.status_code == 200:
-                        self.page.run_task(self._append_message_safe, self.my_id, text, True)
-                        await save_message(int(self.my_id), datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                                           int(self.my_id), int(self.current_friend_id), text, True)
+                    if self.current_group_id:
+                        # send group message
+                        resp = await client.post(f"{API_URL}/send_group_message", json={
+                            "sender_id": int(self.my_id),
+                            "conversation_id": int(self.current_group_id),
+                            "content": text
+                        })
+                        if resp.status_code == 200:
+                            self.page.run_task(self._append_message_safe, self.my_id, text, True)
+                            await save_group_message(int(self.my_id), int(self.current_group_id),
+                                                     datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                                     int(self.my_id), text)
+                        else:
+                            self._show_error_snack(resp.json().get("detail", "Ошибка отправки"))
                     else:
-                        self._show_error_snack(resp.json().get("detail", "Ошибка отправки"))
+                        # direct message
+                        if not self.current_friend_id:
+                            return
+                        resp = await client.post(f"{API_URL}/send_message", json={
+                            "sender_id": int(self.my_id),
+                            "target_id": int(self.current_friend_id),
+                            "content": text
+                        })
+                        if resp.status_code == 200:
+                            self.page.run_task(self._append_message_safe, self.my_id, text, True)
+                            await save_message(int(self.my_id), datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                               int(self.my_id), int(self.current_friend_id), text, True)
+                        else:
+                            self._show_error_snack(resp.json().get("detail", "Ошибка отправки"))
                 except Exception as ex:
                     self._show_error_snack(f"Ошибка сети: {ex}")
 
