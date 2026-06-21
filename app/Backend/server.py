@@ -114,7 +114,6 @@ async def get_block_status_endpoint(req: BlockStatusRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# Group messages route uses a distinct prefix to avoid conflict with /messages/{id1}/{id2}
 @app.get("/group_messages/{conv_id}")
 async def get_group_messages(conv_id: int):
     try:
@@ -133,7 +132,6 @@ async def send_message_endpoint(msg: MessageSend):
         if await is_blocked(blocker_id=msg.sender_id, blocked_id=msg.target_id):
             raise HTTPException(status_code=403, detail="You have blocked this user. Unblock them to send messages.")
 
-        # Strict Mode Check
         if await is_strict_mode(msg.target_id):
             if not await is_sender_allowed(msg.target_id, msg.sender_id):
                 raise HTTPException(status_code=403, detail="This user only accepts messages from their contacts.")

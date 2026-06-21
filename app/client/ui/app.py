@@ -7,7 +7,6 @@ async def main(page: ft.Page):
     page.title = "Xenon Messenger"
     page.padding = 20
 
-    # Apply saved theme mode
     settings = load_settings()
     page.theme_mode = ft.ThemeMode.DARK if settings.get("theme_mode") == "dark" else ft.ThemeMode.LIGHT
 

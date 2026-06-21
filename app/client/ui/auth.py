@@ -7,7 +7,6 @@ API_URL = "http://localhost:8000"
 
 def build_auth_window(page: ft.Page, on_success):
     settings = load_settings()
-    # Apply dark mode setting
     page.theme_mode = ft.ThemeMode.DARK if settings.get("theme_mode") == "dark" else ft.ThemeMode.LIGHT
     saved_accounts = settings.get("accounts", [])
 

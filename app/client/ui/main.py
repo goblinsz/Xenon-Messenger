@@ -29,7 +29,6 @@ class MainWindow:
         self.settings = load_settings()
         self.theme = self.settings.get("theme", {})
 
-        # initialize attributes that apply_theme will touch
         self.current_font = None
         self.current_size = 16
         self.my_bubble_color = "#DCF8C6"
@@ -112,7 +111,6 @@ class MainWindow:
         if self.current_font == "Default": self.current_font = None
         self.current_size = int(self.theme.get("font_size", 16))
         self.my_bubble_color = self.theme.get("bubble_color", "#DCF8C6")
-        # Ensure dark mode from settings is applied to the page
         self.page.theme_mode = ft.ThemeMode.DARK if self.settings.get("theme_mode") == "dark" else ft.ThemeMode.LIGHT
         self.page.update()
 
@@ -136,7 +134,6 @@ class MainWindow:
             try:
                 with open(self.contacts_file, "r", encoding="utf-8") as f:
                     contacts = json.load(f)
-                    # Ensure all ids are stored as strings to avoid type mismatches later
                     for c in contacts:
                         if isinstance(c.get("id"), int):
                             c["id"] = str(c["id"])
@@ -166,7 +163,6 @@ class MainWindow:
         privacy_switch = ft.Switch(label="Private mode",
                                    value=self.settings.get("strict_mode", False),
                                    on_change=self.toggle_strict_mode)
-        # Extended font options
         font_dropdown = ft.Dropdown(label="Font Family", value=self.theme.get("font_family"),
                                     options=[
                                         ft.DropdownOption(key="Default"),
@@ -184,7 +180,6 @@ class MainWindow:
                                     options=[ft.DropdownOption(key=str(s), text=str(s)) for s in
                                              [12, 14, 16, 18, 20, 24]],
                                     on_select=lambda e: change_color(e, "font_size"), width=260)
-        # Extended background color options
         bg_color_dropdown = ft.Dropdown(label="Background Color", value=self.theme.get("bg_color"),
                                         options=[
                                             ft.DropdownOption(key="", text="Default"),
@@ -196,7 +191,6 @@ class MainWindow:
                                             ft.DropdownOption(key="#C8E6C9", text="Light Green")
                                         ],
                                         on_select=lambda e: change_color(e, "bg_color"), width=260)
-        # Extended bubble color options
         bubble_color_dropdown = ft.Dropdown(label="My Bubble Color", value=self.theme.get("bubble_color"),
                                             options=[
                                                 ft.DropdownOption(key="#DCF8C6", text="Classic Green"),
@@ -247,7 +241,6 @@ class MainWindow:
                                                  alignment=ft.Alignment.CENTER, bgcolor="#80000000", expand=True)
 
     def show_settings(self):
-        # Toggle settings overlay
         if self.settings_overlay.visible:
             self.settings_overlay.visible = False
             self.page.update()
@@ -257,7 +250,6 @@ class MainWindow:
         self.page.update()
 
     def show_add_contact(self):
-        # Toggle add contact overlay
         if self.add_contact_overlay.visible:
             self.add_contact_overlay.visible = False
             self.page.update()
@@ -269,7 +261,6 @@ class MainWindow:
         self.page.update()
 
     def show_create_group(self):
-        # Toggle create group overlay
         if self.create_group_overlay.visible:
             self.create_group_overlay.visible = False
             self.page.update()
@@ -396,7 +387,6 @@ class MainWindow:
         else:
             self.block_warning.visible = False
             self.msg_input.disabled = False
-            # Enable send button for both direct and group chats
             self.send_btn.disabled = False
 
         if getattr(self, 'i_blocked_them', False):
@@ -488,18 +478,15 @@ class MainWindow:
         self.page.update()
 
         messages_data = []
-        # Always fetch from API to guarantee correct order
         async with httpx.AsyncClient(trust_env=False) as client:
             try:
                 resp = await client.get(f"{API_URL}/messages/{self.my_id}/{friend_id}")
                 if resp.status_code == 200:
                     data = resp.json()
-                    # The server might return a list directly, or a dict with "messages" key
                     if isinstance(data, list):
                         messages_data = data
                     else:
                         messages_data = data.get("messages", [])
-                    # Sort by timestamp ascending
                     messages_data.sort(key=lambda m: str(m.get('timestamp', '')))
                 else:
                     print(f"load_chat_history HTTP {resp.status_code}: {resp.text}")
@@ -520,20 +507,16 @@ class MainWindow:
         self.page.update()
 
         messages_data = []
-        # Always fetch from API to guarantee correct order
         async with httpx.AsyncClient(trust_env=False) as client:
             try:
                 resp = await client.get(f"{API_URL}/group_messages/{conv_id}")
                 if resp.status_code == 200:
                     data = resp.json()
-                    # The server might return a list directly, or a dict with "messages" key
                     if isinstance(data, list):
                         messages_data = data
                     else:
                         messages_data = data.get("messages", [])
-                    # Sort by timestamp ascending
                     messages_data.sort(key=lambda m: str(m.get('timestamp', '')))
-                    # Cache fetched messages locally, just like direct chat
                     for msg in messages_data:
                         await save_group_message(int(self.my_id), int(conv_id),
                                                  msg.get('timestamp', ''),
@@ -555,7 +538,6 @@ class MainWindow:
 
     def trigger_notification(self, sender_id, content, conv_id=None):
         if conv_id:
-            # group message notification
             sender_name = self.get_sender_name(sender_id)
             snack = ft.SnackBar(content=ft.Text(f"New group message from {sender_name}: {content}"), action="View",
                                 on_action=lambda e: self.select_group(conv_id, "Group"))
@@ -576,7 +558,6 @@ class MainWindow:
             pass
 
     async def verify_and_add_contact(self, sender_id: str):
-        # Convert sender_id to int for comparison with stored ids (which may be ints or strings)
         sender_int = int(sender_id)
         if not any(int(c["id"]) == sender_int for c in self.my_contacts):
             async with httpx.AsyncClient(trust_env=False) as client:
@@ -584,7 +565,6 @@ class MainWindow:
                     resp = await client.get(f"{API_URL}/users/id/{sender_id}")
                     if resp.status_code == 200:
                         u = resp.json()
-                        # Store id as string for consistency
                         self.my_contacts.append({"id": str(u["id"]), "username": u["username"], "name": u["name"]})
                         self.save_contacts_json()
                         await self.load_contacts()
@@ -606,11 +586,10 @@ class MainWindow:
                         content = data.get('content')
                         sender = str(data.get('from'))
                         timestamp = data.get('timestamp')
-                        conv_id = data.get('conversation_id')  # may be present for group messages
+                        conv_id = data.get('conversation_id')
 
                         if content:
                             if conv_id:
-                                # group message
                                 print(f"Received group message: conv_id={conv_id}, sender={sender}")
                                 await save_group_message(int(self.my_id), int(conv_id), timestamp, int(sender), content)
                                 if self.current_group_id == str(conv_id):
@@ -620,7 +599,6 @@ class MainWindow:
                                     self.trigger_notification(sender, content, conv_id=str(conv_id))
                                     self.show_desktop_notification(sender_name, content)
                             else:
-                                # direct message
                                 await self.verify_and_add_contact(sender)
                                 await save_message(int(self.my_id), timestamp, int(sender), int(self.my_id), content, False)
 
@@ -665,7 +643,6 @@ class MainWindow:
             async with httpx.AsyncClient(trust_env=False) as client:
                 try:
                     if self.current_group_id:
-                        # send group message
                         resp = await client.post(f"{API_URL}/send_group_message", json={
                             "sender_id": int(self.my_id),
                             "conversation_id": int(self.current_group_id),
@@ -679,7 +656,6 @@ class MainWindow:
                         else:
                             self._show_error_snack(resp.json().get("detail", "Ошибка отправки"))
                     else:
-                        # direct message
                         if not self.current_friend_id:
                             return
                         resp = await client.post(f"{API_URL}/send_message", json={
