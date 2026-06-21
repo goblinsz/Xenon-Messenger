@@ -112,6 +112,8 @@ class MainWindow:
         if self.current_font == "Default": self.current_font = None
         self.current_size = int(self.theme.get("font_size", 16))
         self.my_bubble_color = self.theme.get("bubble_color", "#DCF8C6")
+        # Ensure dark mode from settings is applied to the page
+        self.page.theme_mode = ft.ThemeMode.DARK if self.settings.get("theme_mode") == "dark" else ft.ThemeMode.LIGHT
         self.page.update()
 
     def update_settings_file(self):
@@ -155,7 +157,10 @@ class MainWindow:
             if self.current_friend_id: asyncio.create_task(self.load_chat_history(self.current_friend_id))
 
         def toggle_dark_mode(e):
-            self.page.theme_mode = ft.ThemeMode.DARK if self.page.theme_mode == ft.ThemeMode.LIGHT else ft.ThemeMode.LIGHT
+            new_mode = ft.ThemeMode.DARK if self.page.theme_mode == ft.ThemeMode.LIGHT else ft.ThemeMode.LIGHT
+            self.page.theme_mode = new_mode
+            self.settings["theme_mode"] = "dark" if new_mode == ft.ThemeMode.DARK else "light"
+            self.update_settings_file()
             self.page.update()
 
         privacy_switch = ft.Switch(label="Private mode",

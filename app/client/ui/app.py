@@ -1,11 +1,15 @@
 import flet as ft
 from auth import build_auth_window
 from main import MainWindow
+from settings_manager import load_settings
 
 async def main(page: ft.Page):
     page.title = "Xenon Messenger"
     page.padding = 20
-    page.theme_mode = ft.ThemeMode.LIGHT
+
+    # Apply saved theme mode
+    settings = load_settings()
+    page.theme_mode = ft.ThemeMode.DARK if settings.get("theme_mode") == "dark" else ft.ThemeMode.LIGHT
 
     async def show_main(my_id: str, my_name: str, my_username: str):
         page.controls.clear()
