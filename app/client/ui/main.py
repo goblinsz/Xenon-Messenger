@@ -7,7 +7,7 @@ import asyncio
 import os
 
 
-from chat_history import read_chat, save_message, read_group_chat
+from chat_history import save_message
 from settings_manager import load_settings, save_settings
 from windows_toasts import WindowsToaster, Toast
 
@@ -444,17 +444,13 @@ class MainWindow:
         self.page.update()
 
         messages_data = []
-        history = await read_chat(int(self.my_id), int(self.my_id), int(friend_id))
-        if history:
-            messages_data = history
-        else:
-            async with httpx.AsyncClient(trust_env=False) as client:
-                try:
-                    resp = await client.get(f"{API_URL}/messages/{self.my_id}/{friend_id}")
-                    if resp.status_code == 200:
-                        messages_data = resp.json().get("messages", [])
-                except:
-                    pass
+        async with httpx.AsyncClient(trust_env=False) as client:
+            try:
+                resp = await client.get(f"{API_URL}/messages/{self.my_id}/{friend_id}")
+                if resp.status_code == 200:
+                    messages_data = resp.json().get("messages", [])
+            except:
+                pass
 
         bubbles = []
         for msg in messages_data:
@@ -466,25 +462,23 @@ class MainWindow:
         self.message_history.update()
 
     async def load_group_history(self, conv_id: str):
-        history = await read_group_chat(int(self.my_id), int(conv_id))
         self.message_history.controls.clear()
-        if not history:
-            async with httpx.AsyncClient(trust_env=False) as client:
-                try:
-                    resp = await client.get(f"{API_URL}/messages/group/{conv_id}")
-                    if resp.status_code == 200:
-                        for msg in resp.json().get("messages", []):
-                            is_mine = str(msg["sender"]) == str(self.my_id)
-                            self.message_history.controls.append(
-                                self.build_chat_bubble(f"{self.get_sender_name(str(msg['sender']))}: {msg['content']}",
-                                                       is_mine))
-                except:
-                    pass
-        else:
-            for h in history:
-                is_mine = str(h["sender"]) == str(self.my_id)
-                self.message_history.controls.append(
-                    self.build_chat_bubble(f"{self.get_sender_name(str(h['sender']))}: {h['content']}", is_mine))
+        self.page.update()
+
+        messages_data = []
+        async with httpx.AsyncClient(trust_env=False) as client:
+            try:
+                resp = await client.get(f"{API_URL}/messages/group/{conv_id}")
+                if resp.status_code == 200:
+                    messages_data = resp.json().get("messages", [])
+            except:
+                pass
+
+        for msg in messages_data:
+            is_mine = str(msg["sender"]) == str(self.my_id)
+            self.message_history.controls.append(
+                self.build_chat_bubble(f"{self.get_sender_name(str(msg['sender']))}: {msg['content']}",
+                                       is_mine))
         self.page.update()
 
     def trigger_notification(self, sender_id, content):
