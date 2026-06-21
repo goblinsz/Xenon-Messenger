@@ -488,6 +488,12 @@ class MainWindow:
                         messages_data = data.get("messages", [])
                     # Sort by timestamp ascending
                     messages_data.sort(key=lambda m: str(m.get('timestamp', '')))
+                    # Cache fetched messages locally, just like direct chat
+                    for msg in messages_data:
+                        await save_group_message(int(self.my_id), int(conv_id),
+                                                 msg.get('timestamp', ''),
+                                                 int(msg['sender']),
+                                                 msg['content'])
             except:
                 pass
 
