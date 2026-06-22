@@ -1,7 +1,11 @@
 import json
+import os
 import aio_pika
+from dotenv import load_dotenv
 
-RABBIT_URL = "amqp://g:g@10.0.0.103/"
+load_dotenv()
+
+RABBIT_URL = os.getenv("RABBIT_URL", "amqp://g:g@10.0.0.103/")
 EXCHANGE_NAME = "direct_exchange"
 
 
