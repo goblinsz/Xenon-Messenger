@@ -142,9 +142,6 @@ class MainWindow:
         self.apply_theme()
         self.build_overlays()
 
-        if os.path.exists("pictures/favicon.png"):
-            self.page.icon = os.path.abspath("pictures/favicon.png")
-
     @property
     def contacts_file(self):
         return f"contacts_{self.my_id}.json"
