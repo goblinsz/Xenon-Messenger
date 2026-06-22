@@ -94,7 +94,7 @@ class MainWindow:
         self.msg_input.on_submit = self.send_message
 
         # Logo image for toolbar
-        logo_image = ft.Image(src="pictures/logo.jpg", width=32, height=32, fit=ft.ImageFit.CONTAIN)
+        logo_image = ft.Image(src="pictures/logo.jpg", width=32, height=32, fit="contain")
 
         self.toolbar = ft.Row(
             controls=[
