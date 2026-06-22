@@ -4,3 +4,4 @@ flet-desktop==0.85.3
 flet
 windows-toasts
 python-dotenv
+cryptography
