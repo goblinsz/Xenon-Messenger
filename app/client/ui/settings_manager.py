@@ -11,7 +11,8 @@ DEFAULT_SETTINGS = {
         "bg_color": "",
         "bubble_color": "#DCF8C6"
     },
-    "theme_mode": "light"
+    "theme_mode": "light",
+    "private_key": ""
 }
 
 def load_settings():

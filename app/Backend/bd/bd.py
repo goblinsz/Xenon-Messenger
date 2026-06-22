@@ -34,7 +34,8 @@ async def init_db_schema():
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY, username VARCHAR(50) UNIQUE NOT NULL, 
                 name VARCHAR(100) NOT NULL, password VARCHAR(100) NOT NULL, 
-                strict_mode BOOLEAN DEFAULT FALSE
+                strict_mode BOOLEAN DEFAULT FALSE,
+                public_key TEXT DEFAULT ''
             );
             CREATE TABLE IF NOT EXISTS blocked_users (
                 blocker_id INT REFERENCES users(id), blocked_id INT REFERENCES users(id),
@@ -57,11 +58,14 @@ async def init_db_schema():
             );
         """)
 
-async def register_user(username: str, name: str, password: str) -> int:
+async def register_user(username: str, name: str, password: str, public_key: str = "") -> int:
     hashed = await asyncio.to_thread(lambda: bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8'))
     async with pool.acquire() as conn:
         try:
-            return await conn.fetchval("INSERT INTO users (username, name, password) VALUES ($1, $2, $3) RETURNING id;", username, name, hashed)
+            return await conn.fetchval(
+                "INSERT INTO users (username, name, password, public_key) VALUES ($1, $2, $3, $4) RETURNING id;",
+                username, name, hashed, public_key
+            )
         except asyncpg.exceptions.UniqueViolationError:
             raise Exception("Username already exists")
 
@@ -74,12 +78,12 @@ async def authenticate_user(username: str, password: str) -> Tuple[Optional[str]
 
 async def get_user_by_username(username: str):
     async with pool.acquire() as conn:
-        row = await conn.fetchrow("SELECT id, username, name FROM users WHERE username = $1;", username)
+        row = await conn.fetchrow("SELECT id, username, name, public_key FROM users WHERE username = $1;", username)
         return dict(row) if row else None
 
 async def get_user_profile_by_id(user_id: int):
     async with pool.acquire() as conn:
-        row = await conn.fetchrow("SELECT id, username, name FROM users WHERE id = $1;", user_id)
+        row = await conn.fetchrow("SELECT id, username, name, public_key FROM users WHERE id = $1;", user_id)
         return dict(row) if row else None
 
 async def get_all_users_list():
@@ -180,3 +184,12 @@ async def get_conversation_participants(conversation_id: int):
     async with pool.acquire() as conn:
         rows = await conn.fetch("SELECT user_id FROM participants WHERE conversation_id = $1;", conversation_id)
         return [r['user_id'] for r in rows]
+
+async def update_public_key(user_id: int, public_key: str) -> None:
+    async with pool.acquire() as conn:
+        await conn.execute("UPDATE users SET public_key = $1 WHERE id = $2;", public_key, user_id)
+
+async def get_public_key(user_id: int) -> Optional[str]:
+    async with pool.acquire() as conn:
+        row = await conn.fetchval("SELECT public_key FROM users WHERE id = $1;", user_id)
+        return row if row else None

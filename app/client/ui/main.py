@@ -6,6 +6,11 @@ import json
 import asyncio
 import os
 from dotenv import load_dotenv
+from cryptography.hazmat.primitives.asymmetric import x25519
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.fernet import Fernet
+import base64
 
 load_dotenv()
 
@@ -15,6 +20,32 @@ RABBIT_URL = os.getenv("RABBIT_URL", "amqp://g:g@10.0.0.103/")
 from chat_history import save_message, save_group_message, read_group_chat, read_chat
 from settings_manager import load_settings, save_settings
 from windows_toasts import WindowsToaster, Toast
+
+
+def derive_shared_key(my_private_hex: str, their_public_hex: str) -> bytes:
+    my_private_bytes = bytes.fromhex(my_private_hex)
+    their_public_bytes = bytes.fromhex(their_public_hex)
+    private_key = x25519.X25519PrivateKey.from_private_bytes(my_private_bytes)
+    public_key = x25519.X25519PublicKey.from_public_bytes(their_public_bytes)
+    shared = private_key.exchange(public_key)
+    # Derive a 32-byte key suitable for Fernet
+    derived = HKDF(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=None,
+        info=b"xenon-messenger-key",
+    ).derive(shared)
+    return base64.urlsafe_b64encode(derived)
+
+
+def encrypt_message(plaintext: str, key: bytes) -> str:
+    f = Fernet(key)
+    return f.encrypt(plaintext.encode()).decode()
+
+
+def decrypt_message(ciphertext: str, key: bytes) -> str:
+    f = Fernet(key)
+    return f.decrypt(ciphertext.encode()).decode()
 
 
 class MainWindow:
@@ -495,6 +526,24 @@ class MainWindow:
             except Exception as e:
                 print(f"load_chat_history error: {e}")
 
+        # Try to decrypt messages
+        my_private_hex = self.settings.get("private_key", "")
+        if my_private_hex:
+            try:
+                async with httpx.AsyncClient(trust_env=False) as client:
+                    resp = await client.get(f"{API_URL}/public_key/{friend_id}")
+                    if resp.status_code == 200:
+                        their_public_hex = resp.json().get("public_key", "")
+                        if their_public_hex:
+                            key = derive_shared_key(my_private_hex, their_public_hex)
+                            for msg in messages_data:
+                                try:
+                                    msg["content"] = decrypt_message(msg["content"], key)
+                                except Exception:
+                                    pass  # keep original if decryption fails
+            except Exception:
+                pass
+
         bubbles = []
         for msg in messages_data:
             is_mine = str(msg["sender"]) == str(self.my_id)
@@ -601,15 +650,30 @@ class MainWindow:
                                     self.trigger_notification(sender, content, conv_id=str(conv_id))
                                     self.show_desktop_notification(sender_name, content)
                             else:
+                                # Decrypt incoming direct message
+                                my_private_hex = self.settings.get("private_key", "")
+                                decrypted_content = content
+                                if my_private_hex:
+                                    try:
+                                        async with httpx.AsyncClient(trust_env=False) as client:
+                                            resp = await client.get(f"{API_URL}/public_key/{sender}")
+                                            if resp.status_code == 200:
+                                                their_public_hex = resp.json().get("public_key", "")
+                                                if their_public_hex:
+                                                    key = derive_shared_key(my_private_hex, their_public_hex)
+                                                    decrypted_content = decrypt_message(content, key)
+                                    except Exception:
+                                        pass
+
                                 await self.verify_and_add_contact(sender)
                                 await save_message(int(self.my_id), timestamp, int(sender), int(self.my_id), content, False)
 
                                 if sender == self.current_friend_id:
-                                    self.page.run_task(self._append_message_safe, sender, content, False)
+                                    self.page.run_task(self._append_message_safe, sender, decrypted_content, False)
                                 else:
                                     sender_name = self.get_sender_name(sender)
-                                    self.trigger_notification(sender, content)
-                                    self.show_desktop_notification(sender_name, content)
+                                    self.trigger_notification(sender, decrypted_content)
+                                    self.show_desktop_notification(sender_name, decrypted_content)
 
                 await queue.consume(on_message)
                 await self.stop_event.wait()
@@ -645,6 +709,7 @@ class MainWindow:
             async with httpx.AsyncClient(trust_env=False) as client:
                 try:
                     if self.current_group_id:
+                        # Group messages remain unencrypted
                         resp = await client.post(f"{API_URL}/send_group_message", json={
                             "sender_id": int(self.my_id),
                             "conversation_id": int(self.current_group_id),
@@ -660,10 +725,25 @@ class MainWindow:
                     else:
                         if not self.current_friend_id:
                             return
+
+                        # Encrypt the message
+                        my_private_hex = self.settings.get("private_key", "")
+                        encrypted_text = text
+                        if my_private_hex:
+                            try:
+                                resp = await client.get(f"{API_URL}/public_key/{self.current_friend_id}")
+                                if resp.status_code == 200:
+                                    their_public_hex = resp.json().get("public_key", "")
+                                    if their_public_hex:
+                                        key = derive_shared_key(my_private_hex, their_public_hex)
+                                        encrypted_text = encrypt_message(text, key)
+                            except Exception:
+                                pass
+
                         resp = await client.post(f"{API_URL}/send_message", json={
                             "sender_id": int(self.my_id),
                             "target_id": int(self.current_friend_id),
-                            "content": text
+                            "content": encrypted_text
                         })
                         if resp.status_code == 200:
                             self.page.run_task(self._append_message_safe, self.my_id, text, True)

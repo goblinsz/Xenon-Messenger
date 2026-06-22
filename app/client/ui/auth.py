@@ -3,11 +3,28 @@ import httpx
 import os
 from dotenv import load_dotenv
 from settings_manager import load_settings, save_settings
+from cryptography.hazmat.primitives.asymmetric import x25519
+from cryptography.hazmat.primitives import serialization
 
 load_dotenv()
 
 API_URL = os.getenv("API_URL", "http://10.0.0.103:8000")
 print(f"Using API_URL: {API_URL}")
+
+
+def generate_key_pair():
+    private_key = x25519.X25519PrivateKey.generate()
+    private_bytes = private_key.private_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PrivateFormat.Raw,
+        encryption_algorithm=serialization.NoEncryption()
+    )
+    public_key = private_key.public_key()
+    public_bytes = public_key.public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw
+    )
+    return private_bytes.hex(), public_bytes.hex()
 
 
 def build_auth_window(page: ft.Page, on_success):
@@ -37,6 +54,12 @@ def build_auth_window(page: ft.Page, on_success):
         payload = {"username": uname, "password": pwd}
         if is_reg:
             payload["name"] = name_val
+            # Generate key pair and upload public key
+            private_hex, public_hex = generate_key_pair()
+            payload["public_key"] = public_hex
+            # Store private key in settings
+            settings["private_key"] = private_hex
+            save_settings(settings)
 
         async with httpx.AsyncClient(trust_env=False) as client:
             try:
@@ -62,7 +85,7 @@ def build_auth_window(page: ft.Page, on_success):
                     page.update()
             except Exception as ex:
                 error_text.value = f"Server error: {ex}"
-                print(f"Connection error: {ex} (API_URL={API_URL})")   # diagnostic output
+                print(f"Connection error: {ex} (API_URL={API_URL})")
                 page.update()
 
     def remove_account(uname):

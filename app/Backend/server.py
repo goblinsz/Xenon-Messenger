@@ -9,7 +9,8 @@ from bd.bd import (
     get_or_create_direct_conversation, save_message_db, get_conversation_messages,
     create_group_conversation, set_strict_mode, is_strict_mode, update_whitelist, is_sender_allowed,
     unblock_user, get_block_status,
-    get_user_conversations, get_conversation_participants
+    get_user_conversations, get_conversation_participants,
+    update_public_key, get_public_key
 )
 from sendk import send
 
@@ -28,6 +29,7 @@ class UserCreate(BaseModel):
     username: str
     name: str
     password: str
+    public_key: str = ""
 
 
 class UserLogin(BaseModel):
@@ -74,10 +76,14 @@ class GroupMessageSend(BaseModel):
     conversation_id: int
     content: str
 
+class PublicKeyUpload(BaseModel):
+    user_id: int
+    public_key: str
+
 @app.post("/register")
 async def register(user: UserCreate):
     try:
-        return {"status": "ok", "id": await register_user(user.username, user.name, user.password)}
+        return {"status": "ok", "id": await register_user(user.username, user.name, user.password, user.public_key)}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -138,6 +144,7 @@ async def send_message_endpoint(msg: MessageSend):
 
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         conv_id = await get_or_create_direct_conversation(msg.sender_id, msg.target_id)
+        # Store the already encrypted content as-is
         await save_message_db(conv_id, msg.sender_id, msg.content, timestamp)
         await send(target_id=str(msg.target_id), content=msg.content, sender=str(msg.sender_id), timestamp=timestamp)
         return {"status": "ok", "message": "Sent to queue"}
@@ -237,6 +244,28 @@ async def send_group_message_endpoint(msg: GroupMessageSend):
                     is_group=True
                 )
         return {"status": "ok"}
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/upload_public_key")
+async def upload_public_key_endpoint(req: PublicKeyUpload):
+    try:
+        await update_public_key(req.user_id, req.public_key)
+        return {"status": "ok"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/public_key/{user_id}")
+async def get_public_key_endpoint(user_id: int):
+    try:
+        key = await get_public_key(user_id)
+        if not key:
+            raise HTTPException(status_code=404, detail="Public key not found")
+        return {"status": "ok", "public_key": key}
     except HTTPException as he:
         raise he
     except Exception as e:
