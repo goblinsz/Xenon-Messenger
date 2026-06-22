@@ -12,7 +12,7 @@ from cryptography.fernet import Fernet
 import base64
 
 
-API_URL = "http://localhost:8000"
+API_URL = "http://10.0.0.103:8000"
 RABBIT_URL = "amqp://g:g@10.0.0.103/"
 
 from chat_history import save_message, save_group_message, read_group_chat, read_chat
