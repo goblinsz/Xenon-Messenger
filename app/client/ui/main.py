@@ -781,7 +781,7 @@ class MainWindow:
                         if resp.status_code == 200:
                             self.page.run_task(self._append_message_safe, self.my_id, text, True)
                             await save_message(int(self.my_id), datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                                               int(self.my_id), int(self.current_friend_id), text, True)
+                                               int(self.my_id), int(self.current_friend_id), encrypted_text, True)
                         else:
                             self._show_error_snack(resp.json().get("detail", "Ошибка отправки"))
                 except Exception as ex:
