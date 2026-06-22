@@ -144,7 +144,6 @@ async def send_message_endpoint(msg: MessageSend):
 
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         conv_id = await get_or_create_direct_conversation(msg.sender_id, msg.target_id)
-        # Store the already encrypted content as-is
         await save_message_db(conv_id, msg.sender_id, msg.content, timestamp)
         await send(target_id=str(msg.target_id), content=msg.content, sender=str(msg.sender_id), timestamp=timestamp)
         return {"status": "ok", "message": "Sent to queue"}

@@ -1,4 +1,3 @@
-# app\client\ui\main.py
 from datetime import datetime
 import flet as ft
 import httpx
@@ -27,7 +26,6 @@ def derive_shared_key(my_private_hex: str, their_public_hex: str) -> bytes:
     private_key = x25519.X25519PrivateKey.from_private_bytes(my_private_bytes)
     public_key = x25519.X25519PublicKey.from_public_bytes(their_public_bytes)
     shared = private_key.exchange(public_key)
-    # Derive a 32-byte key suitable for Fernet
     derived = HKDF(
         algorithm=hashes.SHA256(),
         length=32,
@@ -48,7 +46,6 @@ def decrypt_message(ciphertext: str, key: bytes) -> str:
 
 
 def deduplicate_contacts(contacts):
-    """Remove duplicate entries based on user id (as string)."""
     seen = set()
     result = []
     for c in contacts:
@@ -56,7 +53,6 @@ def deduplicate_contacts(contacts):
         if cid and cid not in seen:
             seen.add(cid)
             result.append(c)
-        # if duplicate, skip it
     return result
 
 
@@ -93,7 +89,6 @@ class MainWindow:
         self.send_btn = ft.Button("Send", icon=ft.Icons.SEND, on_click=self.send_message)
         self.msg_input.on_submit = self.send_message
 
-        # Logo image for toolbar
         logo_image = ft.Image(src="pictures/logo.jpg", width=32, height=32, fit="contain")
 
         self.toolbar = ft.Row(
@@ -150,9 +145,8 @@ class MainWindow:
         self.apply_theme()
         self.build_overlays()
 
-        # Set the window icon (favicon for web, taskbar icon for desktop)
         if os.path.exists("pictures/logo.jpg"):
-            self.page.icon = "pictures/logo.jpg"
+            self.page.icon = os.path.abspath("pictures/logo.jpg")
 
     @property
     def contacts_file(self):
@@ -172,11 +166,10 @@ class MainWindow:
         save_settings(self.settings)
 
     def get_my_private_key(self) -> str:
-        """Get the private key for the current user from the account entry."""
         for acc in self.settings.get("accounts", []):
             if acc.get("id") == self.my_id:
                 return acc.get("private_key", "")
-        return self.settings.get("private_key", "")  # fallback to global
+        return self.settings.get("private_key", "")
 
     async def initialize(self):
         await self.load_contacts()
@@ -200,17 +193,15 @@ class MainWindow:
                             c["id"] = str(c["id"])
             except Exception:
                 contacts = []
-        # Remove duplicates and entries matching the current user
         contacts = deduplicate_contacts(contacts)
         contacts = [c for c in contacts if str(c.get("id")) != str(self.my_id)]
         return contacts
 
     def save_contacts_json(self):
-        # Deduplicate before saving
         clean = deduplicate_contacts(self.my_contacts)
         with open(self.contacts_file, "w", encoding="utf-8") as f:
             json.dump(clean, f, indent=4, ensure_ascii=False)
-        self.my_contacts[:] = clean  # update in-memory list
+        self.my_contacts[:] = clean
 
     def build_overlays(self):
         def change_color(e, key):
@@ -396,7 +387,6 @@ class MainWindow:
                     else:
                         self.my_contacts.append(
                             {"id": user_id, "username": user.get("username"), "name": user.get("name")})
-                        # Deduplicate before saving
                         self.my_contacts[:] = deduplicate_contacts(self.my_contacts)
                         self.save_contacts_json()
                         self.hide_overlays()
@@ -561,7 +551,6 @@ class MainWindow:
             except Exception as e:
                 print(f"load_chat_history error: {e}")
 
-        # Try to decrypt messages
         my_private_hex = self.get_my_private_key()
         if my_private_hex:
             try:
@@ -575,7 +564,7 @@ class MainWindow:
                                 try:
                                     msg["content"] = decrypt_message(msg["content"], key)
                                 except Exception:
-                                    pass  # keep original if decryption fails
+                                    pass
             except Exception:
                 pass
 
@@ -640,7 +629,6 @@ class MainWindow:
             toast = Toast()
             toast.text_fields = [f"New Message from {sender_title}", message_content[:60]]
 
-            # Attach the logo image to the toast
             if os.path.exists("pictures/logo.jpg"):
                 toast.image = os.path.abspath("pictures/logo.jpg")
 
@@ -650,19 +638,16 @@ class MainWindow:
 
     async def verify_and_add_contact(self, sender_id: str):
         sender_int = int(sender_id)
-        # Check if already present (by id as integer)
         for c in self.my_contacts:
             if int(c["id"]) == sender_int:
-                return  # already exists
+                return
 
-        # Fetch user info from server
         async with httpx.AsyncClient(trust_env=False) as client:
             try:
                 resp = await client.get(f"{API_URL}/users/id/{sender_id}")
                 if resp.status_code == 200:
                     u = resp.json()
                     self.my_contacts.append({"id": str(u["id"]), "username": u["username"], "name": u["name"]})
-                    # Deduplicate and save
                     self.my_contacts[:] = deduplicate_contacts(self.my_contacts)
                     self.save_contacts_json()
                     await self.load_contacts()
@@ -697,7 +682,6 @@ class MainWindow:
                                     self.trigger_notification(sender, content, conv_id=str(conv_id))
                                     self.show_desktop_notification(sender_name, content)
                             else:
-                                # Decrypt incoming direct message
                                 my_private_hex = self.get_my_private_key()
                                 decrypted_content = content
                                 if my_private_hex:
@@ -756,7 +740,6 @@ class MainWindow:
             async with httpx.AsyncClient(trust_env=False) as client:
                 try:
                     if self.current_group_id:
-                        # Group messages remain unencrypted
                         resp = await client.post(f"{API_URL}/send_group_message", json={
                             "sender_id": int(self.my_id),
                             "conversation_id": int(self.current_group_id),
@@ -773,7 +756,6 @@ class MainWindow:
                         if not self.current_friend_id:
                             return
 
-                        # Encrypt the message
                         my_private_hex = self.get_my_private_key()
                         encrypted_text = text
                         if my_private_hex:
