@@ -7,6 +7,7 @@ from settings_manager import load_settings, save_settings
 load_dotenv()
 
 API_URL = os.getenv("API_URL", "http://10.0.0.103:8000")
+print(f"Using API_URL: {API_URL}")   # diagnostic output
 
 
 def build_auth_window(page: ft.Page, on_success):
@@ -61,6 +62,7 @@ def build_auth_window(page: ft.Page, on_success):
                     page.update()
             except Exception as ex:
                 error_text.value = f"Server error: {ex}"
+                print(f"Connection error: {ex} (API_URL={API_URL})")   # diagnostic output
                 page.update()
 
     def remove_account(uname):
