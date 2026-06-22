@@ -89,13 +89,10 @@ class MainWindow:
         self.send_btn = ft.Button("Send", icon=ft.Icons.SEND, on_click=self.send_message)
         self.msg_input.on_submit = self.send_message
 
-        logo_image = ft.Image(src="pictures/logo.jpg", width=32, height=32, fit="contain")
-
         self.toolbar = ft.Row(
             controls=[
                 ft.Row(
                     controls=[
-                        logo_image,
                         ft.Text("Xenon Messenger", size=22, weight=ft.FontWeight.BOLD),
                         ft.VerticalDivider(width=1, thickness=1, color="grey"),
                         ft.Text(f"@{self.my_username}", size=14, color="blue", weight=ft.FontWeight.BOLD),
@@ -628,10 +625,6 @@ class MainWindow:
             toaster = WindowsToaster("Xenon Messenger")
             toast = Toast()
             toast.text_fields = [f"New Message from {sender_title}", message_content[:60]]
-
-            if os.path.exists("pictures/logo.jpg"):
-                toast.image = os.path.abspath("pictures/logo.jpg")
-
             toaster.show_toast(toast)
         except:
             pass
