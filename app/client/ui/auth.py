@@ -27,6 +27,31 @@ def generate_key_pair():
     return private_bytes.hex(), public_bytes.hex()
 
 
+async def ensure_public_key_on_server(user_id: str, settings: dict):
+    """Check if the user has a public key on the server. If not, generate one and upload it."""
+    async with httpx.AsyncClient(trust_env=False) as client:
+        try:
+            resp = await client.get(f"{API_URL}/check_public_key/{user_id}")
+            if resp.status_code == 200:
+                data = resp.json()
+                if not data.get("has_public_key", False):
+                    # Generate new key pair
+                    private_hex, public_hex = generate_key_pair()
+                    settings["private_key"] = private_hex
+                    save_settings(settings)
+                    # Upload public key
+                    upload_resp = await client.post(f"{API_URL}/upload_public_key", json={
+                        "user_id": int(user_id),
+                        "public_key": public_hex
+                    })
+                    if upload_resp.status_code == 200:
+                        print("Public key uploaded successfully")
+                    else:
+                        print(f"Failed to upload public key: {upload_resp.text}")
+        except Exception as e:
+            print(f"Error checking/uploading public key: {e}")
+
+
 def build_auth_window(page: ft.Page, on_success):
     settings = load_settings()
     page.theme_mode = ft.ThemeMode.DARK if settings.get("theme_mode") == "dark" else ft.ThemeMode.LIGHT
@@ -78,6 +103,10 @@ def build_auth_window(page: ft.Page, on_success):
                             "password": pwd
                         })
                         save_settings(settings)
+
+                    # If logging in (not registering), ensure public key exists on server
+                    if not is_reg:
+                        await ensure_public_key_on_server(user_id, settings)
 
                     await on_success(user_id, user_name, user_username)
                 else:

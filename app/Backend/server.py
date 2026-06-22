@@ -270,3 +270,12 @@ async def get_public_key_endpoint(user_id: int):
         raise he
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/check_public_key/{user_id}")
+async def check_public_key_endpoint(user_id: int):
+    try:
+        key = await get_public_key(user_id)
+        return {"status": "ok", "has_public_key": key is not None and key != ""}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
