@@ -10,7 +10,7 @@ from chat_history import save_message, save_group_message, read_group_chat, read
 from settings_manager import load_settings, save_settings
 from windows_toasts import WindowsToaster, Toast
 
-API_URL = "http://localhost:8000"
+API_URL = "http://10.0.0.103:8000"
 RABBIT_URL = "amqp://g:g@10.0.0.103/"
 
 
@@ -372,13 +372,13 @@ class MainWindow:
 
     def update_block_ui(self):
         if getattr(self, 'they_blocked_me', False):
-            self.block_warning.value = "⚠️ This user has blocked you."
+            self.block_warning.value = "This user has blocked you."
             self.block_warning.color = "red"
             self.block_warning.visible = True
             self.msg_input.disabled = True
             self.send_btn.disabled = True
         elif getattr(self, 'i_blocked_them', False):
-            self.block_warning.value = "⚠️ You have blocked this user."
+            self.block_warning.value = "You have blocked this user."
             self.block_warning.color = "orange"
             self.block_warning.visible = True
             self.msg_input.disabled = True
