@@ -48,6 +48,19 @@ def decrypt_message(ciphertext: str, key: bytes) -> str:
     return f.decrypt(ciphertext.encode()).decode()
 
 
+def deduplicate_contacts(contacts):
+    """Remove duplicate entries based on user id (as string)."""
+    seen = set()
+    result = []
+    for c in contacts:
+        cid = str(c.get("id", ""))
+        if cid and cid not in seen:
+            seen.add(cid)
+            result.append(c)
+        # if duplicate, skip it
+    return result
+
+
 class MainWindow:
     def __init__(self, page: ft.Page, my_id: str, my_name: str, my_username: str, on_logout):
         self.page = page
@@ -163,6 +176,7 @@ class MainWindow:
         await self.on_logout()
 
     def load_contacts_json(self):
+        contacts = []
         if os.path.exists(self.contacts_file):
             try:
                 with open(self.contacts_file, "r", encoding="utf-8") as f:
@@ -170,14 +184,19 @@ class MainWindow:
                     for c in contacts:
                         if isinstance(c.get("id"), int):
                             c["id"] = str(c["id"])
-                    return [c for c in contacts if str(c.get("id")) != str(self.my_id)]
             except Exception:
-                return []
-        return []
+                contacts = []
+        # Remove duplicates and entries matching the current user
+        contacts = deduplicate_contacts(contacts)
+        contacts = [c for c in contacts if str(c.get("id")) != str(self.my_id)]
+        return contacts
 
     def save_contacts_json(self):
+        # Deduplicate before saving
+        clean = deduplicate_contacts(self.my_contacts)
         with open(self.contacts_file, "w", encoding="utf-8") as f:
-            json.dump(self.my_contacts, f, indent=4, ensure_ascii=False)
+            json.dump(clean, f, indent=4, ensure_ascii=False)
+        self.my_contacts[:] = clean  # update in-memory list
 
     def build_overlays(self):
         def change_color(e, key):
@@ -363,6 +382,8 @@ class MainWindow:
                     else:
                         self.my_contacts.append(
                             {"id": user_id, "username": user.get("username"), "name": user.get("name")})
+                        # Deduplicate before saving
+                        self.my_contacts[:] = deduplicate_contacts(self.my_contacts)
                         self.save_contacts_json()
                         self.hide_overlays()
                         await self.load_contacts()
@@ -610,17 +631,24 @@ class MainWindow:
 
     async def verify_and_add_contact(self, sender_id: str):
         sender_int = int(sender_id)
-        if not any(int(c["id"]) == sender_int for c in self.my_contacts):
-            async with httpx.AsyncClient(trust_env=False) as client:
-                try:
-                    resp = await client.get(f"{API_URL}/users/id/{sender_id}")
-                    if resp.status_code == 200:
-                        u = resp.json()
-                        self.my_contacts.append({"id": str(u["id"]), "username": u["username"], "name": u["name"]})
-                        self.save_contacts_json()
-                        await self.load_contacts()
-                except:
-                    pass
+        # Check if already present (by id as integer)
+        for c in self.my_contacts:
+            if int(c["id"]) == sender_int:
+                return  # already exists
+
+        # Fetch user info from server
+        async with httpx.AsyncClient(trust_env=False) as client:
+            try:
+                resp = await client.get(f"{API_URL}/users/id/{sender_id}")
+                if resp.status_code == 200:
+                    u = resp.json()
+                    self.my_contacts.append({"id": str(u["id"]), "username": u["username"], "name": u["name"]})
+                    # Deduplicate and save
+                    self.my_contacts[:] = deduplicate_contacts(self.my_contacts)
+                    self.save_contacts_json()
+                    await self.load_contacts()
+            except Exception:
+                pass
 
     async def listen_to_my_queue(self):
         try:
