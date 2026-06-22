@@ -7,7 +7,7 @@ from settings_manager import load_settings, save_settings
 load_dotenv()
 
 API_URL = os.getenv("API_URL", "http://10.0.0.103:8000")
-print(f"Using API_URL: {API_URL}")   # diagnostic output
+print(f"Using API_URL: {API_URL}")
 
 
 def build_auth_window(page: ft.Page, on_success):
