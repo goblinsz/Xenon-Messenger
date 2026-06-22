@@ -26,4 +26,4 @@ async def main(page: ft.Page):
 
     await show_auth()
 
-ft.app(target=main, assets_dir="assets")
+ft.run(target=main, assets_dir="pictures")

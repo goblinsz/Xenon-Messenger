@@ -142,8 +142,8 @@ class MainWindow:
         self.apply_theme()
         self.build_overlays()
 
-        if os.path.exists("pictures/logo.jpg"):
-            self.page.icon = os.path.abspath("pictures/logo.jpg")
+        if os.path.exists("pictures/favicon.png"):
+            self.page.icon = os.path.abspath("pictures/favicon.png")
 
     @property
     def contacts_file(self):
