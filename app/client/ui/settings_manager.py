@@ -12,7 +12,7 @@ DEFAULT_SETTINGS = {
         "bubble_color": "#DCF8C6"
     },
     "theme_mode": "light",
-    "private_key": ""
+    "private_key": ""  # kept for backward compatibility, but per-account keys are used
 }
 
 def load_settings():
@@ -24,6 +24,10 @@ def load_settings():
             for key in DEFAULT_SETTINGS:
                 if key not in data:
                     data[key] = DEFAULT_SETTINGS[key]
+            # Ensure each account has a private_key field
+            for acc in data.get("accounts", []):
+                if "private_key" not in acc:
+                    acc["private_key"] = ""
             return data
     except Exception:
         return json.loads(json.dumps(DEFAULT_SETTINGS))

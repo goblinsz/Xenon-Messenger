@@ -55,6 +55,11 @@ async def init_db_schema():
                 sender_id INT REFERENCES users(id), content TEXT NOT NULL, created_at VARCHAR(50) NOT NULL
             );
         """)
+        # Migration: add public_key column if it doesn't exist (for existing tables)
+        try:
+            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS public_key TEXT DEFAULT '';")
+        except Exception:
+            pass  # column already exists or other error
 
 async def register_user(username: str, name: str, password: str, public_key: str = "") -> int:
     hashed = await asyncio.to_thread(lambda: bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8'))

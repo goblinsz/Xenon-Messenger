@@ -164,6 +164,13 @@ class MainWindow:
         self.settings["theme"] = self.theme
         save_settings(self.settings)
 
+    def get_my_private_key(self) -> str:
+        """Get the private key for the current user from the account entry."""
+        for acc in self.settings.get("accounts", []):
+            if acc.get("id") == self.my_id:
+                return acc.get("private_key", "")
+        return self.settings.get("private_key", "")  # fallback to global
+
     async def initialize(self):
         await self.load_contacts()
         await self.load_groups()
@@ -548,7 +555,7 @@ class MainWindow:
                 print(f"load_chat_history error: {e}")
 
         # Try to decrypt messages
-        my_private_hex = self.settings.get("private_key", "")
+        my_private_hex = self.get_my_private_key()
         if my_private_hex:
             try:
                 async with httpx.AsyncClient(trust_env=False) as client:
@@ -679,7 +686,7 @@ class MainWindow:
                                     self.show_desktop_notification(sender_name, content)
                             else:
                                 # Decrypt incoming direct message
-                                my_private_hex = self.settings.get("private_key", "")
+                                my_private_hex = self.get_my_private_key()
                                 decrypted_content = content
                                 if my_private_hex:
                                     try:
@@ -755,7 +762,7 @@ class MainWindow:
                             return
 
                         # Encrypt the message
-                        my_private_hex = self.settings.get("private_key", "")
+                        my_private_hex = self.get_my_private_key()
                         encrypted_text = text
                         if my_private_hex:
                             try:

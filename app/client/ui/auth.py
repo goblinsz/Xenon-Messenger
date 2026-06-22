@@ -37,7 +37,11 @@ async def ensure_public_key_on_server(user_id: str, settings: dict):
                 if not data.get("has_public_key", False):
                     # Generate new key pair
                     private_hex, public_hex = generate_key_pair()
-                    settings["private_key"] = private_hex
+                    # Store private key in the account entry
+                    for acc in settings.get("accounts", []):
+                        if acc.get("id") == user_id:
+                            acc["private_key"] = private_hex
+                            break
                     save_settings(settings)
                     # Upload public key
                     upload_resp = await client.post(f"{API_URL}/upload_public_key", json={
@@ -82,9 +86,11 @@ def build_auth_window(page: ft.Page, on_success):
             # Generate key pair and upload public key
             private_hex, public_hex = generate_key_pair()
             payload["public_key"] = public_hex
-            # Store private key in settings
-            settings["private_key"] = private_hex
-            save_settings(settings)
+            # Store private key in the account entry (will be added after registration)
+            # We'll store it after we get the user id
+            temp_private_key = private_hex
+        else:
+            temp_private_key = None
 
         async with httpx.AsyncClient(trust_env=False) as client:
             try:
@@ -95,14 +101,31 @@ def build_auth_window(page: ft.Page, on_success):
                     user_name = data.get("name", uname)
                     user_username = data.get("username", uname)
 
-                    if not any(acc["username"] == uname for acc in settings["accounts"]):
-                        settings["accounts"].append({
+                    # Find or create account entry
+                    account_entry = None
+                    for acc in settings["accounts"]:
+                        if acc["username"] == uname:
+                            account_entry = acc
+                            break
+                    if account_entry is None:
+                        account_entry = {
                             "id": user_id,
                             "username": user_username,
                             "name": user_name,
-                            "password": pwd
-                        })
-                        save_settings(settings)
+                            "password": pwd,
+                            "private_key": ""
+                        }
+                        settings["accounts"].append(account_entry)
+                    else:
+                        # Update fields
+                        account_entry["id"] = user_id
+                        account_entry["name"] = user_name
+                        account_entry["password"] = pwd
+
+                    if is_reg and temp_private_key:
+                        account_entry["private_key"] = temp_private_key
+
+                    save_settings(settings)
 
                     # If logging in (not registering), ensure public key exists on server
                     if not is_reg:
