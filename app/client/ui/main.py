@@ -1,3 +1,4 @@
+# app\client\ui\main.py
 from datetime import datetime
 import flet as ft
 import httpx
@@ -92,10 +93,14 @@ class MainWindow:
         self.send_btn = ft.Button("Send", icon=ft.Icons.SEND, on_click=self.send_message)
         self.msg_input.on_submit = self.send_message
 
+        # Logo image for toolbar
+        logo_image = ft.Image(src="pictures/logo.jpg", width=32, height=32, fit=ft.ImageFit.CONTAIN)
+
         self.toolbar = ft.Row(
             controls=[
                 ft.Row(
                     controls=[
+                        logo_image,
                         ft.Text("Xenon Messenger", size=22, weight=ft.FontWeight.BOLD),
                         ft.VerticalDivider(width=1, thickness=1, color="grey"),
                         ft.Text(f"@{self.my_username}", size=14, color="blue", weight=ft.FontWeight.BOLD),
@@ -144,6 +149,10 @@ class MainWindow:
 
         self.apply_theme()
         self.build_overlays()
+
+        # Set the window icon (favicon for web, taskbar icon for desktop)
+        if os.path.exists("pictures/logo.jpg"):
+            self.page.icon = "pictures/logo.jpg"
 
     @property
     def contacts_file(self):
@@ -630,6 +639,11 @@ class MainWindow:
             toaster = WindowsToaster("Xenon Messenger")
             toast = Toast()
             toast.text_fields = [f"New Message from {sender_title}", message_content[:60]]
+
+            # Attach the logo image to the toast
+            if os.path.exists("pictures/logo.jpg"):
+                toast.image = os.path.abspath("pictures/logo.jpg")
+
             toaster.show_toast(toast)
         except:
             pass
