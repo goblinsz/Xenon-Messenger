@@ -1,14 +1,12 @@
 import flet as ft
 import httpx
 import os
-from dotenv import load_dotenv
 from settings_manager import load_settings, save_settings
 from cryptography.hazmat.primitives.asymmetric import x25519
 from cryptography.hazmat.primitives import serialization
 
-load_dotenv()
 
-API_URL = os.getenv("API_URL", "http://localhost:8000")
+API_URL = "http://localhost:8000"
 print(f"Using API_URL: {API_URL}")
 
 
