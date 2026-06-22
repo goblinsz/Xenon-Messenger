@@ -1,14 +1,18 @@
 import asyncio
 import asyncpg
 import bcrypt
+import os
+from dotenv import load_dotenv
 from typing import Optional, Tuple, List, Dict
 
+load_dotenv()
+
 DB_CONFIG = {
-    "database": "postgres",
-    "user": "postgres",
-    "password": "postgres",
-    "host": "10.0.0.103",
-    "port": 5432
+    "database": os.getenv("DB_NAME", "postgres"),
+    "user": os.getenv("DB_USER", "postgres"),
+    "password": os.getenv("DB_PASSWORD", "postgres"),
+    "host": os.getenv("DB_HOST", "10.0.0.103"),
+    "port": int(os.getenv("DB_PORT", 5432))
 }
 pool: Optional[asyncpg.Pool] = None
 
