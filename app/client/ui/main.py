@@ -12,8 +12,8 @@ from cryptography.fernet import Fernet
 import base64
 
 
-API_URL = "http://10.0.0.103:8000"
-RABBIT_URL = "amqp://g:g@10.0.0.103/"
+API_URL = "http://83.239.75.58:8000"
+RABBIT_URL = "amqp://g:g@83.239.75.58/"
 
 from chat_history import save_message, save_group_message, read_group_chat, read_chat
 from settings_manager import load_settings, save_settings
