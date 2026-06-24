@@ -1,7 +1,0 @@
-aio-pika==9.6.2
-httpx==0.28.1
-flet-desktop==0.85.3
-flet
-windows-toasts
-python-dotenv
-cryptography
