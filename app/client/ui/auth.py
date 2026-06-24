@@ -1,7 +1,7 @@
 import flet as ft
 import httpx
 import os
-from settings_manager import load_settings, save_settings
+from settings_manager import load_settings, save_settings, load_private_keys, save_private_keys
 from cryptography.hazmat.primitives.asymmetric import x25519
 from cryptography.hazmat.primitives import serialization
 
@@ -26,10 +26,9 @@ def generate_key_pair():
 
 
 async def ensure_public_key_on_server(user_id: str, settings: dict):
-    """Check if the user's local private key exists. If missing, generate a new
-    key pair and upload the public key to the server (overwriting any existing
-    public key). If the private key is present locally, only upload the public
-    key if the server does not yet have one."""
+    """Check if the user's local private key exists. If missing, try to recover
+    it from the private‑keys store. Only generate a new key pair if that also
+    fails."""
     # Find the local account entry
     local_entry = None
     for acc in settings.get("accounts", []):
@@ -37,41 +36,37 @@ async def ensure_public_key_on_server(user_id: str, settings: dict):
             local_entry = acc
             break
 
-    # If no local entry exists (shouldn't happen), abort
+    # If no local entry exists (happens after account removal), create one
+    # temporarily so we can work with it.
     if local_entry is None:
-        print("ensure_public_key_on_server: no local account entry found")
+        local_entry = {
+            "id": user_id,
+            "username": "",
+            "name": "",
+            "password": "",
+            "private_key": ""
+        }
+        settings["accounts"].append(local_entry)
+
+    # Already have a private key, nothing to do
+    if local_entry.get("private_key"):
         return
 
-    # If the local private key is empty, we must generate a new key pair
-    # (the server may already have an old public key, but we have no way to
-    # recover the matching private key, so we overwrite it)
-    if not local_entry.get("private_key"):
-        private_hex, public_hex = generate_key_pair()
-        local_entry["private_key"] = private_hex
+    # Try to recover from the private‑keys store
+    private_keys = load_private_keys()
+    recovered_key = private_keys.get(user_id)
+    if recovered_key:
+        local_entry["private_key"] = recovered_key
         save_settings(settings)
-
-        async with httpx.AsyncClient(trust_env=False) as client:
-            try:
-                upload_resp = await client.post(f"{API_URL}/upload_public_key", json={
-                    "user_id": int(user_id),
-                    "public_key": public_hex
-                })
-                if upload_resp.status_code == 200:
-                    print("Public key uploaded successfully")
-                else:
-                    print(f"Failed to upload public key: {upload_resp.text}")
-            except Exception as e:
-                print(f"Error uploading public key: {e}")
-    else:
-        # Private key exists locally; ensure the server has a public key as well.
+        # Ensure the public key is on the server
         async with httpx.AsyncClient(trust_env=False) as client:
             try:
                 resp = await client.get(f"{API_URL}/check_public_key/{user_id}")
                 if resp.status_code == 200:
                     data = resp.json()
                     if not data.get("has_public_key", False):
-                        # Server is missing the public key, re‑derive it from the local private key
-                        private_bytes = bytes.fromhex(local_entry["private_key"])
+                        # Server missing public key – re‑derive and upload
+                        private_bytes = bytes.fromhex(recovered_key)
                         private_key = x25519.X25519PrivateKey.from_private_bytes(private_bytes)
                         public_key = private_key.public_key()
                         public_bytes = public_key.public_bytes(
@@ -79,17 +74,37 @@ async def ensure_public_key_on_server(user_id: str, settings: dict):
                             format=serialization.PublicFormat.Raw
                         )
                         public_hex = public_bytes.hex()
-
                         upload_resp = await client.post(f"{API_URL}/upload_public_key", json={
                             "user_id": int(user_id),
                             "public_key": public_hex
                         })
                         if upload_resp.status_code == 200:
-                            print("Public key uploaded successfully")
-                        else:
-                            print(f"Failed to upload public key: {upload_resp.text}")
+                            print("Public key uploaded (recovered) successfully")
             except Exception as e:
-                print(f"Error checking/uploading public key: {e}")
+                print(f"Error during recovered key upload: {e}")
+        return
+
+    # No local private key and no recovered key – must generate a new key pair
+    private_hex, public_hex = generate_key_pair()
+    local_entry["private_key"] = private_hex
+    save_settings(settings)
+
+    # Also save to the persistent store
+    private_keys[user_id] = private_hex
+    save_private_keys(private_keys)
+
+    async with httpx.AsyncClient(trust_env=False) as client:
+        try:
+            upload_resp = await client.post(f"{API_URL}/upload_public_key", json={
+                "user_id": int(user_id),
+                "public_key": public_hex
+            })
+            if upload_resp.status_code == 200:
+                print("Public key uploaded (new) successfully")
+            else:
+                print(f"Failed to upload public key: {upload_resp.text}")
+        except Exception as e:
+            print(f"Error uploading public key: {e}")
 
 
 def build_auth_window(page: ft.Page, on_success):
@@ -160,6 +175,10 @@ def build_auth_window(page: ft.Page, on_success):
 
                     if is_reg and temp_private_key:
                         account_entry["private_key"] = temp_private_key
+                        # Also store in persistent separate store
+                        private_keys = load_private_keys()
+                        private_keys[user_id] = temp_private_key
+                        save_private_keys(private_keys)
 
                     save_settings(settings)
 
@@ -179,6 +198,7 @@ def build_auth_window(page: ft.Page, on_success):
     def remove_account(uname):
         settings["accounts"] = [acc for acc in settings["accounts"] if acc["username"] != uname]
         save_settings(settings)
+        # Do NOT remove from private‑keys store – keep the key for future logins
         build_account_list()
         if not settings["accounts"]:
             show_login_form()

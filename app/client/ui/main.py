@@ -160,10 +160,16 @@ class MainWindow:
         save_settings(self.settings)
 
     def get_my_private_key(self) -> str:
+        # First try the account entry
         for acc in self.settings.get("accounts", []):
             if acc.get("id") == self.my_id:
-                return acc.get("private_key", "")
-        return self.settings.get("private_key", "")
+                key = acc.get("private_key", "")
+                if key:
+                    return key
+        # Fall back to the separate private‑keys store
+        from settings_manager import load_private_keys
+        private_keys = load_private_keys()
+        return private_keys.get(self.my_id, "")
 
     async def initialize(self):
         await self.load_contacts()

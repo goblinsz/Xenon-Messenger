@@ -2,6 +2,7 @@ import json
 import os
 
 SETTINGS_FILE = "settings.json"
+PRIVATE_KEYS_FILE = "private_keys.json"
 
 DEFAULT_SETTINGS = {
     "accounts": [],
@@ -35,3 +36,18 @@ def load_settings():
 def save_settings(settings):
     with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
         json.dump(settings, f, indent=4)
+
+def load_private_keys():
+    """Load the separate private‑keys store (user_id -> private_key_hex)."""
+    if not os.path.exists(PRIVATE_KEYS_FILE):
+        return {}
+    try:
+        with open(PRIVATE_KEYS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def save_private_keys(private_keys):
+    """Save the separate private‑keys store."""
+    with open(PRIVATE_KEYS_FILE, "w", encoding="utf-8") as f:
+        json.dump(private_keys, f, indent=4)
