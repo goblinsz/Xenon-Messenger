@@ -26,18 +26,12 @@ def generate_key_pair():
 
 
 async def ensure_public_key_on_server(user_id: str, settings: dict):
-    """Check if the user's local private key exists. If missing, try to recover
-    it from the private‑keys store. Only generate a new key pair if that also
-    fails."""
-    # Find the local account entry
     local_entry = None
     for acc in settings.get("accounts", []):
         if acc.get("id") == user_id:
             local_entry = acc
             break
 
-    # If no local entry exists (happens after account removal), create one
-    # temporarily so we can work with it.
     if local_entry is None:
         local_entry = {
             "id": user_id,
@@ -48,24 +42,20 @@ async def ensure_public_key_on_server(user_id: str, settings: dict):
         }
         settings["accounts"].append(local_entry)
 
-    # Already have a private key, nothing to do
     if local_entry.get("private_key"):
         return
 
-    # Try to recover from the private‑keys store
     private_keys = load_private_keys()
     recovered_key = private_keys.get(user_id)
     if recovered_key:
         local_entry["private_key"] = recovered_key
         save_settings(settings)
-        # Ensure the public key is on the server
         async with httpx.AsyncClient(trust_env=False) as client:
             try:
                 resp = await client.get(f"{API_URL}/check_public_key/{user_id}")
                 if resp.status_code == 200:
                     data = resp.json()
                     if not data.get("has_public_key", False):
-                        # Server missing public key – re‑derive and upload
                         private_bytes = bytes.fromhex(recovered_key)
                         private_key = x25519.X25519PrivateKey.from_private_bytes(private_bytes)
                         public_key = private_key.public_key()
@@ -84,12 +74,10 @@ async def ensure_public_key_on_server(user_id: str, settings: dict):
                 print(f"Error during recovered key upload: {e}")
         return
 
-    # No local private key and no recovered key – must generate a new key pair
     private_hex, public_hex = generate_key_pair()
     local_entry["private_key"] = private_hex
     save_settings(settings)
 
-    # Also save to the persistent store
     private_keys[user_id] = private_hex
     save_private_keys(private_keys)
 
@@ -134,11 +122,8 @@ def build_auth_window(page: ft.Page, on_success):
         payload = {"username": uname, "password": pwd}
         if is_reg:
             payload["name"] = name_val
-            # Generate key pair and upload public key
             private_hex, public_hex = generate_key_pair()
             payload["public_key"] = public_hex
-            # Store private key in the account entry (will be added after registration)
-            # We'll store it after we get the user id
             temp_private_key = private_hex
         else:
             temp_private_key = None
@@ -152,7 +137,6 @@ def build_auth_window(page: ft.Page, on_success):
                     user_name = data.get("name", uname)
                     user_username = data.get("username", uname)
 
-                    # Find or create account entry
                     account_entry = None
                     for acc in settings["accounts"]:
                         if acc["username"] == uname:
@@ -168,21 +152,18 @@ def build_auth_window(page: ft.Page, on_success):
                         }
                         settings["accounts"].append(account_entry)
                     else:
-                        # Update fields
                         account_entry["id"] = user_id
                         account_entry["name"] = user_name
                         account_entry["password"] = pwd
 
                     if is_reg and temp_private_key:
                         account_entry["private_key"] = temp_private_key
-                        # Also store in persistent separate store
                         private_keys = load_private_keys()
                         private_keys[user_id] = temp_private_key
                         save_private_keys(private_keys)
 
                     save_settings(settings)
 
-                    # If logging in (not registering), ensure public key exists on server
                     if not is_reg:
                         await ensure_public_key_on_server(user_id, settings)
 
@@ -198,7 +179,6 @@ def build_auth_window(page: ft.Page, on_success):
     def remove_account(uname):
         settings["accounts"] = [acc for acc in settings["accounts"] if acc["username"] != uname]
         save_settings(settings)
-        # Do NOT remove from private‑keys store – keep the key for future logins
         build_account_list()
         if not settings["accounts"]:
             show_login_form()

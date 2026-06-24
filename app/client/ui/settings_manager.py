@@ -13,7 +13,7 @@ DEFAULT_SETTINGS = {
         "bubble_color": "#DCF8C6"
     },
     "theme_mode": "light",
-    "private_key": ""  # kept for backward compatibility, but per-account keys are used
+    "private_key": ""
 }
 
 def load_settings():
@@ -25,7 +25,6 @@ def load_settings():
             for key in DEFAULT_SETTINGS:
                 if key not in data:
                     data[key] = DEFAULT_SETTINGS[key]
-            # Ensure each account has a private_key field
             for acc in data.get("accounts", []):
                 if "private_key" not in acc:
                     acc["private_key"] = ""
@@ -38,7 +37,6 @@ def save_settings(settings):
         json.dump(settings, f, indent=4)
 
 def load_private_keys():
-    """Load the separate private‑keys store (user_id -> private_key_hex)."""
     if not os.path.exists(PRIVATE_KEYS_FILE):
         return {}
     try:
@@ -48,6 +46,5 @@ def load_private_keys():
         return {}
 
 def save_private_keys(private_keys):
-    """Save the separate private‑keys store."""
     with open(PRIVATE_KEYS_FILE, "w", encoding="utf-8") as f:
         json.dump(private_keys, f, indent=4)
