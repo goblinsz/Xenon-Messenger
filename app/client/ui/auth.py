@@ -26,32 +26,70 @@ def generate_key_pair():
 
 
 async def ensure_public_key_on_server(user_id: str, settings: dict):
-    """Check if the user has a public key on the server. If not, generate one and upload it."""
-    async with httpx.AsyncClient(trust_env=False) as client:
-        try:
-            resp = await client.get(f"{API_URL}/check_public_key/{user_id}")
-            if resp.status_code == 200:
-                data = resp.json()
-                if not data.get("has_public_key", False):
-                    # Generate new key pair
-                    private_hex, public_hex = generate_key_pair()
-                    # Store private key in the account entry
-                    for acc in settings.get("accounts", []):
-                        if acc.get("id") == user_id:
-                            acc["private_key"] = private_hex
-                            break
-                    save_settings(settings)
-                    # Upload public key
-                    upload_resp = await client.post(f"{API_URL}/upload_public_key", json={
-                        "user_id": int(user_id),
-                        "public_key": public_hex
-                    })
-                    if upload_resp.status_code == 200:
-                        print("Public key uploaded successfully")
-                    else:
-                        print(f"Failed to upload public key: {upload_resp.text}")
-        except Exception as e:
-            print(f"Error checking/uploading public key: {e}")
+    """Check if the user's local private key exists. If missing, generate a new
+    key pair and upload the public key to the server (overwriting any existing
+    public key). If the private key is present locally, only upload the public
+    key if the server does not yet have one."""
+    # Find the local account entry
+    local_entry = None
+    for acc in settings.get("accounts", []):
+        if acc.get("id") == user_id:
+            local_entry = acc
+            break
+
+    # If no local entry exists (shouldn't happen), abort
+    if local_entry is None:
+        print("ensure_public_key_on_server: no local account entry found")
+        return
+
+    # If the local private key is empty, we must generate a new key pair
+    # (the server may already have an old public key, but we have no way to
+    # recover the matching private key, so we overwrite it)
+    if not local_entry.get("private_key"):
+        private_hex, public_hex = generate_key_pair()
+        local_entry["private_key"] = private_hex
+        save_settings(settings)
+
+        async with httpx.AsyncClient(trust_env=False) as client:
+            try:
+                upload_resp = await client.post(f"{API_URL}/upload_public_key", json={
+                    "user_id": int(user_id),
+                    "public_key": public_hex
+                })
+                if upload_resp.status_code == 200:
+                    print("Public key uploaded successfully")
+                else:
+                    print(f"Failed to upload public key: {upload_resp.text}")
+            except Exception as e:
+                print(f"Error uploading public key: {e}")
+    else:
+        # Private key exists locally; ensure the server has a public key as well.
+        async with httpx.AsyncClient(trust_env=False) as client:
+            try:
+                resp = await client.get(f"{API_URL}/check_public_key/{user_id}")
+                if resp.status_code == 200:
+                    data = resp.json()
+                    if not data.get("has_public_key", False):
+                        # Server is missing the public key, re‑derive it from the local private key
+                        private_bytes = bytes.fromhex(local_entry["private_key"])
+                        private_key = x25519.X25519PrivateKey.from_private_bytes(private_bytes)
+                        public_key = private_key.public_key()
+                        public_bytes = public_key.public_bytes(
+                            encoding=serialization.Encoding.Raw,
+                            format=serialization.PublicFormat.Raw
+                        )
+                        public_hex = public_bytes.hex()
+
+                        upload_resp = await client.post(f"{API_URL}/upload_public_key", json={
+                            "user_id": int(user_id),
+                            "public_key": public_hex
+                        })
+                        if upload_resp.status_code == 200:
+                            print("Public key uploaded successfully")
+                        else:
+                            print(f"Failed to upload public key: {upload_resp.text}")
+            except Exception as e:
+                print(f"Error checking/uploading public key: {e}")
 
 
 def build_auth_window(page: ft.Page, on_success):
