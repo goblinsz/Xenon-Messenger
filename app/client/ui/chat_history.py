@@ -1,7 +1,14 @@
 import os
 import json
+import platformdirs
 
-HISTORY_DIR = "chat_history"
+
+APP_DATA_DIR = platformdirs.user_data_dir(appname="XenonMessenger", appauthor="Xenon", roaming=False)
+os.makedirs(APP_DATA_DIR, exist_ok=True)
+
+# История чатов будет храниться в подпапке внутри AppData
+HISTORY_DIR = os.path.join(APP_DATA_DIR, "chat_history")
+os.makedirs(HISTORY_DIR, exist_ok=True)
 
 
 def get_chat_filename(owner_id: int, id1: int, id2: int) -> str:

@@ -6,7 +6,7 @@ from cryptography.hazmat.primitives.asymmetric import x25519
 from cryptography.hazmat.primitives import serialization
 
 
-API_URL = "http://83.239.75.58:8000"
+API_URL = "http://1111"
 print(f"Using API_URL: {API_URL}")
 
 

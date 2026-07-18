@@ -5,3 +5,4 @@ flet
 windows-toasts
 python-dotenv
 cryptography
+platformdirs

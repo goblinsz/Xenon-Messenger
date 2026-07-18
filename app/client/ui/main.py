@@ -5,15 +5,21 @@ import aio_pika
 import json
 import asyncio
 import os
+import platformdirs
 from cryptography.hazmat.primitives.asymmetric import x25519
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.fernet import Fernet
 import base64
 
+API_URL = "http://1111"
+RABBIT_URL = "amqp://g:g@1111/"
 
-API_URL = "http://83.239.75.58:8000"
-RABBIT_URL = "amqp://g:g@83.239.75.58/"
+# Windows: C:\Users\<User>\AppData\Local\Xenon
+# macOS: ~/Library/Application Support/Xenon
+# Linux: ~/.local/share/Xenon
+APP_DATA_DIR = platformdirs.user_data_dir(appname="XenonMessenger", appauthor="Xenon", roaming=False)
+os.makedirs(APP_DATA_DIR, exist_ok=True)
 
 from chat_history import save_message, save_group_message, read_group_chat, read_chat
 from settings_manager import load_settings, save_settings
@@ -65,6 +71,8 @@ class MainWindow:
         self.on_logout = on_logout
         self.current_friend_id = None
         self.current_group_id = None
+
+        # Теперь контакты будут загружаться из AppData
         self.my_contacts = self.load_contacts_json()
 
         self.settings = load_settings()
@@ -76,7 +84,8 @@ class MainWindow:
 
         self.stop_event = asyncio.Event()
 
-        self.status_text = ft.Text(f"Logged in as: {my_name} (ID: {my_id})", size=16, color="gray", weight=ft.FontWeight.BOLD)
+        self.status_text = ft.Text(f"Logged in as: {my_name} (ID: {my_id})", size=16, color="gray",
+                                   weight=ft.FontWeight.BOLD)
         self.block_btn = ft.IconButton(ft.Icons.BLOCK, tooltip="Block User", visible=False, icon_color="red",
                                        on_click=self.handle_block_toggle)
         self.block_warning = ft.Text("", size=14, weight=ft.FontWeight.BOLD, visible=False)
@@ -144,7 +153,8 @@ class MainWindow:
 
     @property
     def contacts_file(self):
-        return f"contacts_{self.my_id}.json"
+        # <-- ИЗМЕНЕНО: Путь теперь ведет в APP_DATA_DIR
+        return os.path.join(APP_DATA_DIR, f"contacts_{self.my_id}.json")
 
     def apply_theme(self):
         self.page.bgcolor = self.theme.get("bg_color") if self.theme.get("bg_color") else None
